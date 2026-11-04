@@ -1,0 +1,112 @@
+# trustdesk.template.yaml
+# One template provisions the whole TrustDesk deal room: 3 agents, 1 room.
+#
+# Written against the Switch template language, version 1
+# (github.com/sandbox-quantum/switch/blob/main/docs/TEMPLATES.md), shaped like the
+# official examples/agent-templates/triage-pair.template.yaml.
+#   Tested with Switch Console v0.40.1 (Windows 11, local Switch server + bundled Mattermost)
+#
+# Import: Switch Console -> Templates -> Import template -> paste this file -> Use.
+#
+# Who can talk to whom (Switch `addressing`):
+#   AE, Legal         -> qa-drafter only        (qa-drafter: anyone in its rooms)
+#   Security Lead     -> all agents             (room owner = whoever runs the template)
+#   qa-drafter        -> evidence-checker       (evidence-checker: owner-agents)
+#   packager          -> Security Lead only     (packager: owner)
+version: 1
+
+params:
+  team:
+    type: string
+    label: Deal name
+    description: Prefix for every agent and room this creates, e.g. acme
+    default: acme
+    pattern: "[a-z][a-z0-9-]*"
+  # A plain string, not `type: directory`: a directory param is treated as one
+  # agent's whole folder, but here it's the repo root each agent's folder sits in.
+  repo_dir:
+    type: string
+    label: TrustDesk repo folder
+    description: The cloned trustdesk repo on the machine the agents run on
+    default: "D:/hackathon/trustdesk"
+    input: advanced
+  # Provider is written as `claude` on each agent, not as a param: on Windows the
+  # form fills a provider param from this computer's list, which Switch blocks
+  # ("Not supported here"), even when the agents run on a managed machine.
+  # A `machine` (managed agent), not `location: local`: on Windows, Switch Console
+  # can't run agents itself ("SDK sessions require a POSIX SSH execution host"),
+  # but the machine's agents controller can.
+  machine:
+    type: machine
+    description: The machine all three run on (your PC's agents controller)
+    default: [$first]
+    input: advanced
+  bridge:
+    type: bridge
+    description: Messaging app the deal room lives in
+    default: [Mattermost, $first]
+  # The AE and Legal are not template params: a `user` param must already exist on
+  # the messaging app, or the run is refused. Invite them into the room after it's
+  # created (Mattermost: channel menu -> Add members).
+
+agents:
+  - name: "{team}-qa-drafter"
+    display_name: "QA Drafter ({team})"
+    description: Drafts and labels security questionnaire answers
+    addressing: anyone            # AE, Legal and the owner can all ask it
+    provider: claude
+    machine: "{machine}"
+    directory: "{repo_dir}/agents/drafter"      # reads agents/drafter/CLAUDE.md
+    instructions: |
+      You are the TrustDesk questionnaire drafter. Follow CLAUDE.md in your directory.
+      Parse the uploaded questionnaire, reuse answer-library.yaml matches, draft the rest
+      from room documents, and label every answer VERIFIED, NEEDS-EVIDENCE or COMMITMENT.
+      Send all factual claims to @{team}-evidence-checker in one batched message.
+      Ask Legal to approve every COMMITMENT and the Security Lead to approve factual answers.
+      Never invent facts. No citation means NEEDS-EVIDENCE.
+
+  - name: "{team}-evidence-checker"
+    display_name: "Evidence Checker ({team})"
+    description: Proves answers with file:line citations from the product repo
+    addressing: owner-agents      # owner + other agents only; the AE is refused
+    provider: claude
+    machine: "{machine}"
+    directory: "{repo_dir}/agents/evidence"
+    # Placeholder until Person B's Python Agent Protocol agent replaces it.
+    instructions: |
+      For each claim, find proof in the product repo and reply in the thread with file:line
+      and the matched text. No proof found -> status "missing" with a reason, so the
+      answer is downgraded to NEEDS-EVIDENCE.
+
+  - name: "{team}-packager"
+    display_name: "Packager ({team})"
+    description: Builds the final XLSX, evidence appendix and answer-library PR
+    addressing: owner             # Security Lead only
+    provider: claude
+    machine: "{machine}"
+    directory: "{repo_dir}/agents/packager"     # reads agents/packager/CLAUDE.md
+    instructions: |
+      You are the TrustDesk packager. Follow CLAUDE.md in your directory.
+      Act only when the Security Lead tags you, and only after every gate passes:
+      write the completed XLSX, evidence.md, and open a PR to answer-library.yaml.
+      Refuse anyone else, and refuse to package while approvals are missing.
+
+room:
+  name: "{team}-deal-room"
+  description: TrustDesk security review for the {team} deal
+  bridge: "{bridge}"
+  channel_type: channel_private
+  instructions: |
+    This room completes one customer security questionnaire.
+    The AE uploads the questionnaire and talks to the drafter. The Security Lead
+    (room owner) approves factual answers and releases the package. Legal approves
+    every COMMITMENT answer. Nothing leaves this room until those approvals are recorded.
+  agents: ["{team}-qa-drafter", "{team}-evidence-checker", "{team}-packager"]
+  users: ["{$creator}"]        # Security Lead; invite the AE and Legal after creation
+  aliases:
+    "{team}-qa-drafter": qa-drafter
+    "{team}-evidence-checker": evidence-checker
+    "{team}-packager": packager
+
+kickoff: |
+  @{team}-qa-drafter: introduce the TrustDesk review protocol in two lines.
