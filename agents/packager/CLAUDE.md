@@ -61,7 +61,10 @@ Generated 2026-11-06 16:05 IST · Released by security-lead
 ```
 
 ### 3. Answer-library pull request
-- Branch: `trustdesk/<deal>-library`
+You share this checkout with the people working on the repo, so leave it as you found it.
+- Before you start: `git status` must be clean and on `main`, and `git pull` first. If not, stop
+  and tell the Security Lead what is uncommitted; never stash or discard someone's work.
+- Branch: `trustdesk/<deal>-library`, created from the latest `main`
 - Add only **new or changed** approved answers to `room-docs/answer-library.yaml`. Match existing
   entries by question meaning; update the entry rather than duplicating it.
 - Each entry keeps `question`, `answer`, `label`, `control`, `evidence`, `approved_by`,
@@ -70,6 +73,8 @@ Generated 2026-11-06 16:05 IST · Released by security-lead
 - Commit message: `trustdesk: add <n> approved answers from <deal>`
 - Open the PR with `gh pr create`. Body: counts by label, list of added/updated IDs, link to
   `evidence.md`.
+- **Always finish with `git switch main`**, so the next person or run starts on `main`. Then
+  post the PR link.
 
 ## Final thread message
 
