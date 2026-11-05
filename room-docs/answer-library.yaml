@@ -12,244 +12,244 @@
 #   source_deal: acme
 answers:
   - question: "Is customer data in your production database encrypted at rest?"
-    answer: "Yes. Customer data in the production database is encrypted at rest with AES-256 using AWS KMS customer-managed keys."
+    answer: "Yes. Production database storage is encrypted at rest. Per policy (encryption-policy.md): AES-256 with AWS KMS customer-managed keys."
     label: VERIFIED
     control: db_encryption_at_rest
     evidence: ["acmecloud/terraform/rds.tf:18  storage_encrypted = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are encryption keys rotated automatically?"
-    answer: "Yes. KMS keys rotate automatically every year."
+    answer: "Yes. Automatic key rotation is enabled on the KMS key. Per policy (encryption-policy.md): keys rotate every year."
     label: VERIFIED
     control: kms_key_rotation
     evidence: ["acmecloud/terraform/kms.tf:4  enable_key_rotation     = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is data in transit encrypted with TLS 1.2 or higher?"
-    answer: "Yes. All traffic to the platform is encrypted in transit with TLS 1.2 or higher."
+    answer: "Yes. The public load balancer uses the TLS security policy ELBSecurityPolicy-TLS13-1-2-2021-06. Per policy (encryption-policy.md): all traffic to the platform uses TLS 1.2 or higher."
     label: VERIFIED
     control: tls_in_transit
     evidence: ["acmecloud/terraform/alb.tf:12  ssl_policy        = \"ELBSecurityPolicy-TLS13-1-2-2021-06\""]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are plain HTTP requests redirected to HTTPS?"
-    answer: "Yes. Plain HTTP is redirected to HTTPS."
+    answer: "Yes. The load balancer has an HTTP 301 redirect rule. Per policy (encryption-policy.md): plain HTTP is redirected to HTTPS."
     label: VERIFIED
     control: https_redirect
     evidence: ["acmecloud/terraform/alb.tf:31  status_code = \"HTTP_301\""]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you send an HSTS header on your web application?"
-    answer: "Yes. Browsers are told to use HTTPS only (HSTS)."
+    answer: "Yes. The web server sends a Strict-Transport-Security header (max-age=31536000; includeSubDomains)."
     label: VERIFIED
     control: hsts
     evidence: ["acmecloud/configs/nginx.conf:5  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are connections between your application and database encrypted?"
-    answer: "Yes. Connections from the application to the database require TLS."
+    answer: "Yes. The database parameter group includes rds.force_ssl. Per policy (encryption-policy.md): connections from the application to the database require TLS."
     label: VERIFIED
     control: db_tls_required
     evidence: ["acmecloud/terraform/rds.tf:6  name  = \"rds.force_ssl\""]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is multi-factor authentication required for administrative access?"
-    answer: "Yes. MFA is always required for administrative access."
+    answer: "Yes. An IAM policy conditions access on multi-factor authentication (aws:MultiFactorAuthPresent). Per policy (access-control-policy.md): MFA is always required for administrative access."
     label: VERIFIED
     control: mfa_admin
     evidence: ["acmecloud/iam/mfa_policy.json:10  \"BoolIfExists\": { \"aws:MultiFactorAuthPresent\": \"false\" }"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do employees sign in through single sign-on (SSO)?"
-    answer: "Yes. Workforce sign-in uses single sign-on through Okta."
+    answer: "Yes. Workforce sign-in is configured with Okta as the single sign-on provider."
     label: VERIFIED
     control: sso
     evidence: ["acmecloud/configs/auth.yaml:3  provider: okta"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you enforce a minimum password length of at least 12 characters?"
-    answer: "Yes. Passwords must be at least 14 characters."
+    answer: "Yes. The minimum password length is set to 14 characters."
     label: VERIFIED
     control: password_length
     evidence: ["acmecloud/terraform/iam.tf:2  minimum_password_length        = 14"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you prevent reuse of previous passwords?"
-    answer: "Yes. The last 24 passwords cannot be reused."
+    answer: "Yes. Password reuse prevention is set to the last 24 passwords."
     label: VERIFIED
     control: password_reuse
     evidence: ["acmecloud/terraform/iam.tf:7  password_reuse_prevention      = 24"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do administrative sessions time out after inactivity?"
-    answer: "Yes. Console sessions time out after 30 minutes of inactivity."
+    answer: "Yes. Session timeout is configured at 30 minutes. Per policy (access-control-policy.md): console sessions time out after 30 minutes of inactivity."
     label: VERIFIED
     control: session_timeout
     evidence: ["acmecloud/configs/auth.yaml:7  session_timeout_minutes: 30"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is access granted on a least-privilege basis (e.g. read-only roles for auditors)?"
-    answer: "Yes. Access follows least privilege; auditors get read-only roles."
+    answer: "Yes. A role with the AWS ReadOnlyAccess policy is defined. Per policy (access-control-policy.md): access follows least privilege and auditors get read-only roles."
     label: VERIFIED
     control: least_privilege
     evidence: ["acmecloud/terraform/iam.tf:19  policy_arn = \"arn:aws:iam::aws:policy/ReadOnlyAccess\""]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are production code changes peer-reviewed before merge?"
-    answer: "Yes. Production changes go through reviewed pull requests with at least one approval."
+    answer: "Yes. The repository settings require 1 approving review. Per policy (access-control-policy.md): production changes go through reviewed pull requests."
     label: VERIFIED
     control: code_review_required
     evidence: ["acmecloud/.github/settings.yml:6  required_approving_review_count: 1"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you keep an audit log of administrative actions across all regions?"
-    answer: "Yes. All administrative API activity is recorded in a multi-region audit trail."
+    answer: "Yes. A multi-region audit trail is enabled. Per policy (incident-response-policy.md): it records all administrative API activity."
     label: VERIFIED
     control: audit_logging
     evidence: ["acmecloud/terraform/logging.tf:4  is_multi_region_trail         = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are audit logs protected against tampering?"
-    answer: "Yes. The audit trail has log file integrity validation."
+    answer: "Yes. Log file integrity validation is enabled on the audit trail."
     label: VERIFIED
     control: log_integrity
     evidence: ["acmecloud/terraform/logging.tf:6  enable_log_file_validation    = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are logs retained for at least 12 months?"
-    answer: "Yes. Application and network logs are kept for 365 days."
+    answer: "Yes. Two log groups are configured with 365-day retention. Per policy (incident-response-policy.md): application and network logs are kept for 365 days."
     label: VERIFIED
     control: log_retention
     evidence: ["acmecloud/terraform/logging.tf:11  retention_in_days = 365", "acmecloud/terraform/logging.tf:17  retention_in_days = 365"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you capture network flow logs for your production network?"
-    answer: "Yes. VPC flow logs are enabled for the production network."
+    answer: "Yes. A VPC flow log is configured."
     label: VERIFIED
     control: network_flow_logs
     evidence: ["acmecloud/terraform/network.tf:6  resource \"aws_flow_log\" \"main\" {"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you take automated backups of customer data?"
-    answer: "Yes. The database keeps 35 days of automated backups."
+    answer: "Yes. Automated database backups are retained for 35 days."
     label: VERIFIED
     control: db_backups
     evidence: ["acmecloud/terraform/rds.tf:21  backup_retention_period = 35"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is your production database deployed across multiple availability zones?"
-    answer: "Yes. The database runs across multiple availability zones."
+    answer: "Yes. The database is configured as multi-AZ."
     label: VERIFIED
     control: multi_az
     evidence: ["acmecloud/terraform/rds.tf:23  multi_az                = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is the production database protected against accidental deletion?"
-    answer: "Yes. Deletion protection is enabled on the production database."
+    answer: "Yes. Deletion protection is enabled on the database."
     label: VERIFIED
     control: deletion_protection
     evidence: ["acmecloud/terraform/rds.tf:24  deletion_protection     = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is versioning enabled on storage that holds customer files?"
-    answer: "Yes. Versioning is enabled on customer file storage."
+    answer: "Yes. Versioning is enabled on two storage buckets."
     label: VERIFIED
     control: storage_versioning
     evidence: ["acmecloud/terraform/s3.tf:38  status = \"Enabled\"", "acmecloud/terraform/s3.tf:45  status = \"Enabled\""]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is public access blocked on all storage buckets?"
-    answer: "Yes. Public access is blocked on all storage buckets."
+    answer: "Yes. Public ACL blocking is enabled on three storage buckets."
     label: VERIFIED
     control: storage_public_access_blocked
     evidence: ["acmecloud/terraform/s3.tf:51  block_public_acls       = true", "acmecloud/terraform/s3.tf:59  block_public_acls       = true", "acmecloud/terraform/s3.tf:67  block_public_acls       = true"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is a web application firewall (WAF) in front of your application?"
-    answer: "Yes. A web application firewall is attached to the public load balancer."
+    answer: "Yes. A web application firewall (WAFv2) is associated with the public load balancer."
     label: VERIFIED
     control: waf
     evidence: ["acmecloud/terraform/alb.tf:36  resource \"aws_wafv2_web_acl_association\" \"public\" {"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is your production database isolated from the public internet?"
-    answer: "Yes. The production database is not reachable from the internet."
+    answer: "Yes. The production database is configured with publicly_accessible = false."
     label: VERIFIED
     control: db_not_public
     evidence: ["acmecloud/terraform/rds.tf:25  publicly_accessible     = false"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is database access restricted to the application tier only?"
-    answer: "Yes. The database accepts connections only from the application tier."
+    answer: "Yes. The database network rule allows traffic from the application security group. Per policy (access-control-policy.md): the database accepts connections only from the application tier."
     label: VERIFIED
     control: db_network_restricted
     evidence: ["acmecloud/terraform/network.tf:27  security_groups = [aws_security_group.app.id]"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you run static application security testing (SAST) on every change?"
-    answer: "Yes. Static analysis (CodeQL) runs in CI."
+    answer: "Yes. CodeQL analysis runs in the CI workflow."
     label: VERIFIED
     control: sast
     evidence: ["acmecloud/.github/workflows/ci.yml:23  - uses: github/codeql-action/analyze@v3"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you monitor third-party dependencies for known vulnerabilities?"
-    answer: "Yes. Dependencies are monitored with Dependabot."
+    answer: "Yes. Dependabot is configured for npm and terraform dependencies."
     label: VERIFIED
     control: dependency_scanning
     evidence: ["acmecloud/.github/dependabot.yml:3  - package-ecosystem: npm", "acmecloud/.github/dependabot.yml:7  - package-ecosystem: terraform"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you scan code for committed secrets?"
-    answer: "Yes. Secret scanning (gitleaks) runs in CI."
+    answer: "Yes. The CI workflow runs gitleaks secret scanning."
     label: VERIFIED
     control: secrets_scanning
     evidence: ["acmecloud/.github/workflows/ci.yml:31  - uses: gitleaks/gitleaks-action@v2"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Are container images scanned for vulnerabilities before deployment?"
-    answer: "Yes. Container images are scanned (Trivy) in CI."
+    answer: "Yes. The CI workflow runs Trivy scanning."
     label: VERIFIED
     control: container_scanning
     evidence: ["acmecloud/.github/workflows/ci.yml:38  - uses: aquasecurity/trivy-action@0.24.0"]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Do you have a public channel for reporting security vulnerabilities?"
-    answer: "Yes. Vulnerabilities can be reported to security@acmecloud.example."
+    answer: "Yes. SECURITY.md asks reporters to email security@acmecloud.example."
     label: VERIFIED
     control: vulnerability_disclosure
     evidence: ["acmecloud/SECURITY.md:5  Email security@acmecloud.example with the details and steps to reproduce."]
     approved_by: security-lead
-    approved_at: "2026-11-05T22:36:12+05:30"
+    approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Within how many hours will you notify us after confirming a data breach?"
     answer: "72 hours: affected customers are notified within 72 hours of AcmeCloud confirming a personal-data breach."
