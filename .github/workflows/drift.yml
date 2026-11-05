@@ -1,0 +1,30 @@
+name: drift
+# Re-prove every approved library answer whenever the product code or the library changes.
+on:
+  push:
+    branches: [main]
+    paths: ["acmecloud/**", "room-docs/answer-library.yaml", "agents/evidence/search.py"]
+  pull_request:
+    paths: ["acmecloud/**", "room-docs/answer-library.yaml", "agents/evidence/search.py"]
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Re-prove approved answers against this commit
+        run: |
+          set +e
+          python tools/drift_watch.py --markdown > drift.md
+          status=$?
+          cat drift.md
+          { echo '```'; cat drift.md; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ $status -eq 1 ]; then echo "::error::TrustDesk drift: approved answers are STALE; re-approve before reuse"; fi
+          exit $status

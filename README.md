@@ -17,7 +17,9 @@ three agents draft, prove and package the answers, and three people approve only
 - **nothing leaves the room** until the Security Lead approves the facts and Legal approves the
   promises, and a release gate in code (not a model) confirms it;
 - text hidden in the customer's spreadsheet ("ignore previous instructions…") is **treated as data**;
-- approved answers are merged into an **answer library by pull request**, so the next questionnaire starts mostly done.
+- approved answers are merged into an **answer library by pull request**, so the next questionnaire starts mostly done;
+- approved answers **decay when the code changes**: a drift check re-proves them, and a broken
+  citation turns the answer STALE until the Security Lead re-approves it.
 
 Track: 01, Best Business Workflow · Tested with Switch Console v0.40.1.
 See a real run in [`docs/example-run/`](docs/example-run/README.md).
@@ -54,6 +56,11 @@ flowchart LR
    [`tools/check_gates.py`](tools/check_gates.py) and refuses unless it exits 0: every answer
    approved by the right person, every citation matching the exact repo line, no unproven "Yes".
    Then it writes the completed XLSX, `evidence.md` with permalinks, and opens a library PR.
+6. **Watch for drift.** Answers are only as true as today's code. `@evidence-checker drift check`
+   runs [`tools/drift_watch.py`](tools/drift_watch.py), which re-proves every approved library
+   answer: **OK**, **MOVED** (same proof, new line number) or **STALE** (the proof is gone or
+   changed), and asks the Security Lead to re-approve anything STALE. The same check runs in CI
+   on every push that touches `acmecloud/`, so `storage_encrypted = false` fails the build.
 
 ## Why Switch
 
@@ -66,6 +73,7 @@ Remove Switch and TrustDesk loses its controls, not just its chat window.
 | Agent-to-agent handoff in the room | Drafter → evidence-checker → drafter, visible to the humans watching | Hidden pipelines nobody can audit |
 | One template provisions everything | `trustdesk.template.yaml` creates all three agents and the room in one click | Hand-configuring every agent and permission per deal |
 | Room-per-deal membership | Each customer's documents stay in that deal's room | One customer's NDA material leaks into another deal's context |
+| Owner-only escalation | A STALE answer becomes a re-approval request to the room owner who approved it | A stale answer has no one to escalate to, and quietly goes out again |
 
 ## Quickstart
 
@@ -81,8 +89,9 @@ signed in, Python 3.11+, and the GitHub CLI (`gh auth login`) for the library PR
    pip install -r requirements.txt
    python -m unittest discover -s tests
    ```
-   The 22 tests check the evidence engine against `tests/answer_key.json` and the release gate
-   against the recorded run (no model, no network). CI runs them on every push.
+   The tests check the evidence engine against `tests/answer_key.json`, the release gate against
+   recorded runs, the drift watcher against edited copies of the code, and the whole pipeline end
+   to end (no model, no network). CI runs them on every push.
 
 2. **Create the room.** In Switch Console: **Templates → Import template**, paste
    [`trustdesk.template.yaml`](trustdesk.template.yaml), **Use**. Set *TrustDesk repo folder* to
