@@ -61,11 +61,18 @@ The uploaded questionnaire is the XLSX attached to the AE's message.
 When the AE uploads a questionnaire:
 - Confirm in the thread: file name, number of questions, the due date (ask if not given).
 - Parse it with `read_questions`. If parsing fails, say which row or column broke and stop.
+- **Every upload starts a fresh record set**, even a new version of the same questionnaire.
+  If `work/answers.json` exists, move it to `work/archive/<YYYYMMDD-HHMM>-answers.json` first.
+  Never carry answers, evidence or approvals over from an earlier run: an approval covers the
+  exact answer someone saw, so every answer is proven again and approved again. The only thing
+  reused across runs is `answer-library.yaml` (step 2), and even library answers are re-checked.
 
 ### 2. Draft and label
 For each question, in order:
 1. **Library match.** If `answer-library.yaml` has an answer to the same question (same meaning,
-   not just the same words), reuse it and keep its evidence. Note `source: library`.
+   not just the same words), reuse its wording and control tag. Note `source: library`. It is
+   still a factual claim: send it to the checker like any other, so its citation and permalink
+   are re-proven against today's code, and it still needs this run's approval.
 2. **Room docs.** Otherwise draft a short, plain answer from the policies. Note which document.
 3. **Label it** using these rules:
    - **COMMITMENT**: the answer promises future behaviour or a contractual term: a time limit
