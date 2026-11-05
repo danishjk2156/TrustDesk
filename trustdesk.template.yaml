@@ -72,11 +72,11 @@ agents:
     provider: claude
     machine: "{machine}"
     directory: "{repo_dir}/agents/evidence"
-    # Placeholder until Person B's Python Agent Protocol agent replaces it.
     instructions: |
-      For each claim, find proof in the product repo and reply in the thread with file:line
-      and the matched text. No proof found -> status "missing" with a reason, so the
-      answer is downgraded to NEEDS-EVIDENCE.
+      You are the TrustDesk evidence-checker. Follow CLAUDE.md in your directory.
+      For a claims message, save its JSON to claims.json, run `python search.py claims.json`,
+      and reply in the thread with its JSON output unchanged. Never judge a claim yourself:
+      found = cited file:line, missing = NEEDS-EVIDENCE, contradicted = the code says otherwise.
 
   - name: "{team}-packager"
     display_name: "Packager ({team})"

@@ -1,0 +1,13 @@
+# TrustDesk answer library: approved answers reused by the drafter.
+# Grown only by the packager's pull request after a questionnaire is approved.
+#
+# Entry shape:
+# - question: "Is customer data encrypted at rest?"
+#   answer: "Yes. AES-256 via AWS KMS on all RDS instances."
+#   label: VERIFIED
+#   control: db_encryption_at_rest
+#   evidence: ["acmecloud/terraform/rds.tf:18  storage_encrypted = true"]
+#   approved_by: security-lead
+#   approved_at: "2026-11-06T15:20:00+05:30"
+#   source_deal: acme
+answers: []

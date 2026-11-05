@@ -1,0 +1,11 @@
+# Workforce sign-in for the acmecloud admin console
+sso:
+  provider: okta
+  protocol: saml
+  domain: acmecloud.okta.com
+
+session_timeout_minutes: 30
+
+mfa:
+  enforced_for_roles: [admin]
+  enforced_for_all_users: false

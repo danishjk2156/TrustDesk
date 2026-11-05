@@ -1,0 +1,242 @@
+[
+  {
+    "id": "Q1",
+    "question": "Is customer data in your production database encrypted at rest?",
+    "control": "db_encryption_at_rest",
+    "expected": "found"
+  },
+  {
+    "id": "Q2",
+    "question": "Are encryption keys rotated automatically?",
+    "control": "kms_key_rotation",
+    "expected": "found"
+  },
+  {
+    "id": "Q3",
+    "question": "Is all customer data stored in object storage (e.g. S3) encrypted at rest?",
+    "control": "storage_encryption_all_buckets",
+    "expected": "contradicted"
+  },
+  {
+    "id": "Q4",
+    "question": "Is data in transit encrypted with TLS 1.2 or higher?",
+    "control": "tls_in_transit",
+    "expected": "found"
+  },
+  {
+    "id": "Q5",
+    "question": "Are plain HTTP requests redirected to HTTPS?",
+    "control": "https_redirect",
+    "expected": "found"
+  },
+  {
+    "id": "Q6",
+    "question": "Do you send an HSTS header on your web application?",
+    "control": "hsts",
+    "expected": "found"
+  },
+  {
+    "id": "Q7",
+    "question": "Are connections between your application and database encrypted?",
+    "control": "db_tls_required",
+    "expected": "found"
+  },
+  {
+    "id": "Q8",
+    "question": "Is multi-factor authentication required for administrative access?",
+    "control": "mfa_admin",
+    "expected": "found"
+  },
+  {
+    "id": "Q9",
+    "question": "Is multi-factor authentication enforced for all workforce users?",
+    "control": "mfa_all_users",
+    "expected": "contradicted"
+  },
+  {
+    "id": "Q10",
+    "question": "Do employees sign in through single sign-on (SSO)?",
+    "control": "sso",
+    "expected": "found"
+  },
+  {
+    "id": "Q11",
+    "question": "Do you enforce a minimum password length of at least 12 characters?",
+    "control": "password_length",
+    "expected": "found"
+  },
+  {
+    "id": "Q12",
+    "question": "Do you prevent reuse of previous passwords?",
+    "control": "password_reuse",
+    "expected": "found"
+  },
+  {
+    "id": "Q13",
+    "question": "Do administrative sessions time out after inactivity?",
+    "control": "session_timeout",
+    "expected": "found"
+  },
+  {
+    "id": "Q14",
+    "question": "Is access granted on a least-privilege basis (e.g. read-only roles for auditors)?",
+    "control": "least_privilege",
+    "expected": "found"
+  },
+  {
+    "id": "Q15",
+    "question": "Are production code changes peer-reviewed before merge?",
+    "control": "code_review_required",
+    "expected": "found"
+  },
+  {
+    "id": "Q16",
+    "question": "Do you keep an audit log of administrative actions across all regions?",
+    "control": "audit_logging",
+    "expected": "found"
+  },
+  {
+    "id": "Q17",
+    "question": "Are audit logs protected against tampering?",
+    "control": "log_integrity",
+    "expected": "found"
+  },
+  {
+    "id": "Q18",
+    "question": "Are logs retained for at least 12 months?",
+    "control": "log_retention",
+    "expected": "found"
+  },
+  {
+    "id": "Q19",
+    "question": "Do you capture network flow logs for your production network?",
+    "control": "network_flow_logs",
+    "expected": "found"
+  },
+  {
+    "id": "Q20",
+    "question": "Do you take automated backups of customer data?",
+    "control": "db_backups",
+    "expected": "found"
+  },
+  {
+    "id": "Q21",
+    "question": "Is your production database deployed across multiple availability zones?",
+    "control": "multi_az",
+    "expected": "found"
+  },
+  {
+    "id": "Q22",
+    "question": "Is the production database protected against accidental deletion?",
+    "control": "deletion_protection",
+    "expected": "found"
+  },
+  {
+    "id": "Q23",
+    "question": "Is versioning enabled on storage that holds customer files?",
+    "control": "storage_versioning",
+    "expected": "found"
+  },
+  {
+    "id": "Q24",
+    "question": "Is public access blocked on all storage buckets?",
+    "control": "storage_public_access_blocked",
+    "expected": "found"
+  },
+  {
+    "id": "Q25",
+    "question": "Is a web application firewall (WAF) in front of your application?",
+    "control": "waf",
+    "expected": "found"
+  },
+  {
+    "id": "Q26",
+    "question": "Is your production database isolated from the public internet?",
+    "control": "db_not_public",
+    "expected": "found"
+  },
+  {
+    "id": "Q27",
+    "question": "Is database access restricted to the application tier only?",
+    "control": "db_network_restricted",
+    "expected": "found"
+  },
+  {
+    "id": "Q28",
+    "question": "Do you run static application security testing (SAST) on every change?",
+    "control": "sast",
+    "expected": "found"
+  },
+  {
+    "id": "Q29",
+    "question": "Do you monitor third-party dependencies for known vulnerabilities?",
+    "control": "dependency_scanning",
+    "expected": "found"
+  },
+  {
+    "id": "Q30",
+    "question": "Do you scan code for committed secrets?",
+    "control": "secrets_scanning",
+    "expected": "found"
+  },
+  {
+    "id": "Q31",
+    "question": "Are container images scanned for vulnerabilities before deployment?",
+    "control": "container_scanning",
+    "expected": "found"
+  },
+  {
+    "id": "Q32",
+    "question": "Do you have a public channel for reporting security vulnerabilities?",
+    "control": "vulnerability_disclosure",
+    "expected": "found"
+  },
+  {
+    "id": "Q33",
+    "question": "Do you test restoring from backups at least annually?",
+    "control": "backup_restore_testing",
+    "expected": "missing"
+  },
+  {
+    "id": "Q34",
+    "question": "Has an independent third party performed a penetration test in the last 12 months?",
+    "control": "penetration_testing",
+    "expected": "missing"
+  },
+  {
+    "id": "Q35",
+    "question": "Is your disaster recovery plan tested at least annually?",
+    "control": "dr_testing",
+    "expected": "missing"
+  },
+  {
+    "id": "Q36",
+    "question": "Is endpoint protection (EDR/antivirus) installed on all employee devices?",
+    "control": "endpoint_protection",
+    "expected": "missing"
+  },
+  {
+    "id": "Q37",
+    "question": "Do you delete customer data on request and at contract termination?",
+    "control": "data_deletion",
+    "expected": "missing"
+  },
+  {
+    "id": "Q38",
+    "question": "Do employees with access to customer data undergo background checks?",
+    "control": "background_checks",
+    "expected": "missing"
+  },
+  {
+    "id": "Q39",
+    "question": "Within how many hours will you notify us after confirming a data breach?",
+    "control": null,
+    "expected": "commitment"
+  },
+  {
+    "id": "Q40",
+    "question": "What monthly uptime do you commit to for the production service?",
+    "control": null,
+    "expected": "commitment"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyAdminActionsWithoutMFA",
+      "Effect": "Deny",
+      "NotAction": ["iam:ChangePassword", "sts:GetSessionToken"],
+      "Resource": "*",
+      "Condition": {
+        "BoolIfExists": { "aws:MultiFactorAuthPresent": "false" }
+      }
+    }
+  ]
+}

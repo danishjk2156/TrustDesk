@@ -37,7 +37,8 @@ Paths are relative to the repo root (two levels up from this directory).
 |---|---|
 | `tools/xlsx_io.py` | `read_questions(path)` returns rows with `ID`, `Question`, `Category` |
 | `room-docs/answer-library.yaml` | Previously approved answers; reuse these first |
-| `room-docs/*.md` | Policies (access, encryption, incident response) and `SECURITY.md` |
+| `room-docs/*-policy.md`, `room-docs/service-levels.md` | Policies: encryption, access control, incident response, service levels |
+| `room-docs/controls.md` | The control tags the evidence-checker understands |
 | `work/answers.json` | **You own this file.** The current answer records for this deal |
 
 The uploaded questionnaire is the XLSX attached to the AE's message.
@@ -63,10 +64,14 @@ For each question, in order:
      encryption, MFA, backups, logging, CI checks or access control. Send it to the checker.
    - **NEEDS-EVIDENCE**: you found no source at all. Write the answer as `"Unknown: <what is
      missing>"`. Never guess.
-4. **Control tag.** Give every factual claim one `control` key from the list agreed with Person B
-   (it must match `agents/evidence/search.py`), e.g. `encryption_at_rest`, `encryption_in_transit`,
-   `mfa`, `backups`, `logging`, `ci_security`, `access_control`, `vulnerability_scanning`,
-   `incident_response`, `data_retention`. Use `other` if none fits.
+4. **Control tag.** Give every factual claim exactly one `control` tag from
+   `room-docs/controls.md`, the one whose description matches the question. Use a tag only
+   from that list; if none fits, use `other` (the checker will report it missing).
+   Examples: "encrypted at rest in the database" → `db_encryption_at_rest`; "all S3 buckets
+   encrypted" → `storage_encryption_all_buckets`; "MFA for all users" → `mfa_all_users`;
+   "backup restores tested" → `backup_restore_testing`.
+5. Send a claim even when the policy already says yes. Policies can be wrong; the checker
+   proves it from the code.
 
 Write every record to `work/answers.json` (format below).
 
@@ -77,8 +82,8 @@ Send **one** batched message to `@evidence-checker` with all factual claims, as 
 {
   "type": "claims",
   "claims": [
-    {"id": "Q17", "control": "encryption_at_rest",
-     "claim": "Customer data is encrypted at rest with AES-256 via AWS KMS on all RDS instances."}
+    {"id": "Q1", "control": "db_encryption_at_rest",
+     "claim": "Customer data in the production database is encrypted at rest with AWS KMS."}
   ]
 }
 ```
@@ -89,9 +94,13 @@ The checker replies in the thread with:
 {
   "type": "evidence",
   "results": [
-    {"id": "Q17", "status": "found",
-     "evidence": ["acmecloud/terraform/rds.tf:42  storage_encrypted = true"]},
-    {"id": "Q23", "status": "missing", "reason": "No backup policy or snapshot config in repo"}
+    {"id": "Q1", "control": "db_encryption_at_rest", "status": "found",
+     "evidence": ["acmecloud/terraform/rds.tf:18  storage_encrypted = true"]},
+    {"id": "Q3", "control": "storage_encryption_all_buckets", "status": "contradicted",
+     "evidence": ["acmecloud/terraform/s3.tf:9  resource \"aws_s3_bucket\" \"exports\" {"],
+     "reason": "1 of 3 S3 buckets have no encryption configuration: exports"},
+    {"id": "Q33", "control": "backup_restore_testing", "status": "missing",
+     "reason": "Not provable from code: backup restores are tested; needs a document or record"}
   ]
 }
 ```
@@ -100,22 +109,30 @@ On reply:
 - `found` → label **VERIFIED**, copy `evidence` into the record exactly as given.
 - `missing` → label **NEEDS-EVIDENCE**, keep the reason. Don't argue with the checker or re-word
   the answer to get around it.
-- If the checker shows a different value (e.g. AES-128 instead of AES-256), correct the answer to
-  match the evidence. The code wins over the policy.
+- `contradicted` → label **NEEDS-EVIDENCE**, keep the evidence and reason, and rewrite the answer
+  to what the code actually shows (e.g. "Partially: 2 of 3 buckets are encrypted; the exports
+  bucket is not."). Flag it at the top of the summary: the policy says one thing, the code another.
+  The code wins over the policy, always.
 
 ### 4. Post the summary
 Post one summary in the thread, in this format:
 
 ```
 TrustDesk review: acme_questionnaire.xlsx (40 questions, due 2026-11-07)
-✅ 31 VERIFIED   ⚠️ 6 NEEDS-EVIDENCE   📝 3 COMMITMENT
+✅ 30 VERIFIED   ⚠️ 8 NEEDS-EVIDENCE   📝 2 COMMITMENT
+
+🚨 Policy contradicted by code (2):
+- Q3 Object storage encrypted? Policy says every bucket; s3.tf:9 `exports` bucket has none.
+- Q9 MFA for all users? Policy says all users; auth.yaml:11 enforced_for_all_users: false.
 
 Needs attention:
-| ID  | Label          | Question (short)              | Why                          |
-|-----|----------------|-------------------------------|------------------------------|
-| Q23 | NEEDS-EVIDENCE | Are backups tested?           | No backup config in repo     |
-| Q31 | COMMITMENT     | Breach notification window?   | Promise: 24 hours, needs Legal |
+| ID  | Label          | Question (short)              | Why                              |
+|-----|----------------|-------------------------------|----------------------------------|
+| Q33 | NEEDS-EVIDENCE | Backup restores tested?       | Not provable from code           |
+| Q39 | COMMITMENT     | Breach notification window?   | Promise: 72 hours, needs Legal   |
 ```
+
+Contradictions always go first: they are answers the policy would have got wrong.
 
 ### 5. Ask for approvals
 Use Switch's in-thread permission requests:
