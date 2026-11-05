@@ -1,0 +1,551 @@
+[
+  {
+    "id": "Q1",
+    "question": "Is customer data in your production database encrypted at rest?",
+    "answer": "Yes. Customer data in the production database is encrypted at rest with AES-256 using AWS KMS customer-managed keys.",
+    "label": "VERIFIED",
+    "control": "db_encryption_at_rest",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:18  storage_encrypted = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q2",
+    "question": "Are encryption keys rotated automatically?",
+    "answer": "Yes. KMS keys rotate automatically every year.",
+    "label": "VERIFIED",
+    "control": "kms_key_rotation",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/kms.tf:4  enable_key_rotation     = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q3",
+    "question": "Is all customer data stored in object storage (e.g. S3) encrypted at rest?",
+    "answer": "Partially: 2 of 3 buckets are encrypted; the exports bucket is not.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "storage_encryption_all_buckets",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/s3.tf:9  resource \"aws_s3_bucket\" \"exports\" {"
+    ],
+    "reason": "1 of 3 S3 buckets have no encryption configuration: exports",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q4",
+    "question": "Is data in transit encrypted with TLS 1.2 or higher?",
+    "answer": "Yes. All traffic to the platform is encrypted in transit with TLS 1.2 or higher.",
+    "label": "VERIFIED",
+    "control": "tls_in_transit",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/alb.tf:12  ssl_policy        = \"ELBSecurityPolicy-TLS13-1-2-2021-06\""
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q5",
+    "question": "Are plain HTTP requests redirected to HTTPS?",
+    "answer": "Yes. Plain HTTP is redirected to HTTPS.",
+    "label": "VERIFIED",
+    "control": "https_redirect",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/alb.tf:31  status_code = \"HTTP_301\""
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q6",
+    "question": "Do you send an HSTS header on your web application?",
+    "answer": "Yes. Browsers are told to use HTTPS only (HSTS).",
+    "label": "VERIFIED",
+    "control": "hsts",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/configs/nginx.conf:5  add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q7",
+    "question": "Are connections between your application and database encrypted?",
+    "answer": "Yes. Connections from the application to the database require TLS.",
+    "label": "VERIFIED",
+    "control": "db_tls_required",
+    "source": "room-docs/encryption-policy.md",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:6  name  = \"rds.force_ssl\""
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q8",
+    "question": "Is multi-factor authentication required for administrative access?",
+    "answer": "Yes. MFA is always required for administrative access.",
+    "label": "VERIFIED",
+    "control": "mfa_admin",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/iam/mfa_policy.json:10  \"BoolIfExists\": { \"aws:MultiFactorAuthPresent\": \"false\" }"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q9",
+    "question": "Is multi-factor authentication enforced for all workforce users?",
+    "answer": "No. MFA is required for administrative access but is not enforced for all workforce users.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "mfa_all_users",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/configs/auth.yaml:11  enforced_for_all_users: false"
+    ],
+    "reason": "The code says the opposite of: mfa enforced for every workforce user",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q10",
+    "question": "Do employees sign in through single sign-on (SSO)?",
+    "answer": "Yes. Workforce sign-in uses single sign-on through Okta.",
+    "label": "VERIFIED",
+    "control": "sso",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/configs/auth.yaml:3  provider: okta"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q11",
+    "question": "Do you enforce a minimum password length of at least 12 characters?",
+    "answer": "Yes. Passwords must be at least 14 characters.",
+    "label": "VERIFIED",
+    "control": "password_length",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/terraform/iam.tf:2  minimum_password_length        = 14"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q12",
+    "question": "Do you prevent reuse of previous passwords?",
+    "answer": "Yes. The last 24 passwords cannot be reused.",
+    "label": "VERIFIED",
+    "control": "password_reuse",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/terraform/iam.tf:7  password_reuse_prevention      = 24"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q13",
+    "question": "Do administrative sessions time out after inactivity?",
+    "answer": "Yes. Console sessions time out after 30 minutes of inactivity.",
+    "label": "VERIFIED",
+    "control": "session_timeout",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/configs/auth.yaml:7  session_timeout_minutes: 30"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q14",
+    "question": "Is access granted on a least-privilege basis (e.g. read-only roles for auditors)?",
+    "answer": "Yes. Access follows least privilege; auditors get read-only roles.",
+    "label": "VERIFIED",
+    "control": "least_privilege",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/terraform/iam.tf:19  policy_arn = \"arn:aws:iam::aws:policy/ReadOnlyAccess\""
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q15",
+    "question": "Are production code changes peer-reviewed before merge?",
+    "answer": "Yes. Production changes go through reviewed pull requests with at least one approval.",
+    "label": "VERIFIED",
+    "control": "code_review_required",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/.github/settings.yml:6  required_approving_review_count: 1"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q16",
+    "question": "Do you keep an audit log of administrative actions across all regions?",
+    "answer": "Yes. All administrative API activity is recorded in a multi-region audit trail.",
+    "label": "VERIFIED",
+    "control": "audit_logging",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/terraform/logging.tf:4  is_multi_region_trail         = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q17",
+    "question": "Are audit logs protected against tampering?",
+    "answer": "Yes. The audit trail has log file integrity validation.",
+    "label": "VERIFIED",
+    "control": "log_integrity",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/terraform/logging.tf:6  enable_log_file_validation    = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q18",
+    "question": "Are logs retained for at least 12 months?",
+    "answer": "Yes. Application and network logs are kept for 365 days.",
+    "label": "VERIFIED",
+    "control": "log_retention",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/terraform/logging.tf:11  retention_in_days = 365",
+      "acmecloud/terraform/logging.tf:17  retention_in_days = 365"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q19",
+    "question": "Do you capture network flow logs for your production network?",
+    "answer": "Yes. VPC flow logs are enabled for the production network.",
+    "label": "VERIFIED",
+    "control": "network_flow_logs",
+    "source": "none",
+    "evidence": [
+      "acmecloud/terraform/network.tf:6  resource \"aws_flow_log\" \"main\" {"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q20",
+    "question": "Do you take automated backups of customer data?",
+    "answer": "Yes. The database keeps 35 days of automated backups.",
+    "label": "VERIFIED",
+    "control": "db_backups",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:21  backup_retention_period = 35"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q21",
+    "question": "Is your production database deployed across multiple availability zones?",
+    "answer": "Yes. The database runs across multiple availability zones.",
+    "label": "VERIFIED",
+    "control": "multi_az",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:23  multi_az                = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q22",
+    "question": "Is the production database protected against accidental deletion?",
+    "answer": "Yes. Deletion protection is enabled on the production database.",
+    "label": "VERIFIED",
+    "control": "deletion_protection",
+    "source": "none",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:24  deletion_protection     = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q23",
+    "question": "Is versioning enabled on storage that holds customer files?",
+    "answer": "Yes. Versioning is enabled on customer file storage.",
+    "label": "VERIFIED",
+    "control": "storage_versioning",
+    "source": "none",
+    "evidence": [
+      "acmecloud/terraform/s3.tf:38  status = \"Enabled\"",
+      "acmecloud/terraform/s3.tf:45  status = \"Enabled\""
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q24",
+    "question": "Is public access blocked on all storage buckets?",
+    "answer": "Yes. Public access is blocked on all storage buckets.",
+    "label": "VERIFIED",
+    "control": "storage_public_access_blocked",
+    "source": "none",
+    "evidence": [
+      "acmecloud/terraform/s3.tf:51  block_public_acls       = true",
+      "acmecloud/terraform/s3.tf:59  block_public_acls       = true",
+      "acmecloud/terraform/s3.tf:67  block_public_acls       = true"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q25",
+    "question": "Is a web application firewall (WAF) in front of your application?",
+    "answer": "Yes. A web application firewall is attached to the public load balancer.",
+    "label": "VERIFIED",
+    "control": "waf",
+    "source": "none",
+    "evidence": [
+      "acmecloud/terraform/alb.tf:36  resource \"aws_wafv2_web_acl_association\" \"public\" {"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q26",
+    "question": "Is your production database isolated from the public internet?",
+    "answer": "Yes. The production database is not reachable from the internet.",
+    "label": "VERIFIED",
+    "control": "db_not_public",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/terraform/rds.tf:25  publicly_accessible     = false"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q27",
+    "question": "Is database access restricted to the application tier only?",
+    "answer": "Yes. The database accepts connections only from the application tier.",
+    "label": "VERIFIED",
+    "control": "db_network_restricted",
+    "source": "room-docs/access-control-policy.md",
+    "evidence": [
+      "acmecloud/terraform/network.tf:27  security_groups = [aws_security_group.app.id]"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q28",
+    "question": "Do you run static application security testing (SAST) on every change?",
+    "answer": "Yes. Static analysis (CodeQL) runs in CI.",
+    "label": "VERIFIED",
+    "control": "sast",
+    "source": "none",
+    "evidence": [
+      "acmecloud/.github/workflows/ci.yml:23  - uses: github/codeql-action/analyze@v3"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q29",
+    "question": "Do you monitor third-party dependencies for known vulnerabilities?",
+    "answer": "Yes. Dependencies are monitored with Dependabot.",
+    "label": "VERIFIED",
+    "control": "dependency_scanning",
+    "source": "none",
+    "evidence": [
+      "acmecloud/.github/dependabot.yml:3  - package-ecosystem: npm",
+      "acmecloud/.github/dependabot.yml:7  - package-ecosystem: terraform"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q30",
+    "question": "Do you scan code for committed secrets?",
+    "answer": "Yes. Secret scanning (gitleaks) runs in CI.",
+    "label": "VERIFIED",
+    "control": "secrets_scanning",
+    "source": "none",
+    "evidence": [
+      "acmecloud/.github/workflows/ci.yml:31  - uses: gitleaks/gitleaks-action@v2"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q31",
+    "question": "Are container images scanned for vulnerabilities before deployment?",
+    "answer": "Yes. Container images are scanned (Trivy) in CI.",
+    "label": "VERIFIED",
+    "control": "container_scanning",
+    "source": "none",
+    "evidence": [
+      "acmecloud/.github/workflows/ci.yml:38  - uses: aquasecurity/trivy-action@0.24.0"
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q32",
+    "question": "Do you have a public channel for reporting security vulnerabilities?",
+    "answer": "Yes. Vulnerabilities can be reported to security@acmecloud.example.",
+    "label": "VERIFIED",
+    "control": "vulnerability_disclosure",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [
+      "acmecloud/SECURITY.md:5  Email security@acmecloud.example with the details and steps to reproduce."
+    ],
+    "reason": null,
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q33",
+    "question": "Do you test restoring from backups at least annually?",
+    "answer": "Unknown: no document or record of backup restore testing.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "backup_restore_testing",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: backup restore testing; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q34",
+    "question": "Has an independent third party performed a penetration test in the last 12 months?",
+    "answer": "Unknown: no document or record of independent penetration test.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "penetration_testing",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: independent penetration test; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q35",
+    "question": "Is your disaster recovery plan tested at least annually?",
+    "answer": "Unknown: no document or record of disaster recovery testing.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "dr_testing",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: disaster recovery testing; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q36",
+    "question": "Is endpoint protection (EDR/antivirus) installed on all employee devices?",
+    "answer": "Unknown: no document or record of endpoint protection on staff devices.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "endpoint_protection",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: endpoint protection on staff devices; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q37",
+    "question": "Do you delete customer data on request and at contract termination?",
+    "answer": "Unknown: no document or record of customer data deletion on request or contract end.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "data_deletion",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: customer data deletion on request or contract end; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q38",
+    "question": "Do employees with access to customer data undergo background checks?",
+    "answer": "Unknown: no document or record of background checks for staff.",
+    "label": "NEEDS-EVIDENCE",
+    "control": "background_checks",
+    "source": "none",
+    "evidence": [],
+    "reason": "Not provable from code: background checks for staff; needs a document or record",
+    "approved_by": "security-lead",
+    "approved_at": "2026-11-05T22:36:12+05:30"
+  },
+  {
+    "id": "Q39",
+    "question": "Within how many hours will you notify us after confirming a data breach?",
+    "answer": "72 hours: affected customers are notified within 72 hours of AcmeCloud confirming a personal-data breach.",
+    "label": "COMMITMENT",
+    "control": "other",
+    "source": "room-docs/incident-response-policy.md",
+    "evidence": [],
+    "reason": "Promise of a time limit; needs Legal",
+    "approved_by": "legal",
+    "approved_at": "2026-11-05T22:39:41+05:30"
+  },
+  {
+    "id": "Q40",
+    "question": "What monthly uptime do you commit to for the production service?",
+    "answer": "99.5% monthly availability for the production platform, excluding announced maintenance. Service credits apply below that.",
+    "label": "COMMITMENT",
+    "control": "other",
+    "source": "room-docs/service-levels.md",
+    "evidence": [],
+    "reason": "SLA figure; needs Legal",
+    "approved_by": "legal",
+    "approved_at": "2026-11-05T22:39:41+05:30"
+  }
+]

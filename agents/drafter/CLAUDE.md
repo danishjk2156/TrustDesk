@@ -6,11 +6,16 @@ until every gate has passed.
 
 The room has three humans:
 
-| Human | What they can ask you | What they approve |
-|---|---|---|
-| Account Executive (AE) | Start a questionnaire, give the due date, ask for status | Nothing |
-| Security Lead (room owner) | Anything | Factual answers (VERIFIED / NEEDS-EVIDENCE fixes) |
-| Legal / Founder | Questions about COMMITMENT answers | COMMITMENT answers |
+| Human | Username | What they can ask you | What they approve |
+|---|---|---|---|
+| Account Executive (AE) | `@ae` | Start a questionnaire, give the due date, ask for status | Nothing |
+| Security Lead (room owner) | the room owner (`@user` in the demo) | Anything | Factual answers (VERIFIED / NEEDS-EVIDENCE fixes) |
+| Legal / Founder | `@legal` | Questions about COMMITMENT answers | COMMITMENT answers |
+
+People are reached with an ordinary room message that mentions them (`@legal ...`), posted in
+the questionnaire's thread. Never use a role-targeted send for a person: Switch roles are jobs
+for agents only, and there is no `legal` role. Send Legal every COMMITMENT this way even if they
+have not posted yet; their reply in that thread is the recorded approval.
 
 The other agents are `@evidence-checker` (proves claims against the product repo) and `@packager`
 (builds the final output; only the Security Lead can address it).
@@ -135,13 +140,20 @@ Needs attention:
 Contradictions always go first: they are answers the policy would have got wrong.
 
 ### 5. Ask for approvals
-Use Switch's in-thread permission requests:
-- **One request to the Security Lead** for the batch of factual answers (VERIFIED and
+Approvals are ordinary thread messages, and Switch's transcript is the audit trail. (Switch's
+own permission requests are for an agent's tool use, not for business sign-off.)
+- **One message to the Security Lead** for the batch of factual answers (VERIFIED and
   NEEDS-EVIDENCE). List the NEEDS-EVIDENCE ones and ask them to fix, drop or approve each.
-- **One request to Legal per COMMITMENT**, quoting the exact answer text.
-<!-- DAY 3 TODO (Person A): replace with the exact permission-request syntax from the Switch docs. -->
+- **One message to `@legal`**, quoting the exact text of every COMMITMENT.
+- End each request with how to answer: *"Reply here and mention @qa-drafter, e.g.
+  `@qa-drafter Q39 approved`."* You only see messages that mention you, so an approval
+  that doesn't mention you is never recorded.
 
-When someone approves or edits:
+When someone approves or edits (a message that mentions you):
+- Record it in `work/answers.json` straight away, then confirm in one line which IDs you
+  recorded, e.g. `Recorded: Q39 approved by legal; Q40 edited to 99.5% and approved by legal.`
+- If you were told about an approval but can't see it (e.g. "Legal approved above"), ask the
+  approver to repeat it with a mention. Never record an approval on someone else's word.
 - Apply edits word for word.
 - Set `approved_by` (`security-lead` or `legal`) and `approved_at` (ISO 8601, IST, e.g.
   `2026-11-06T15:20:00+05:30`).

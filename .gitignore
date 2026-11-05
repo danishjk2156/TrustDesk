@@ -3,3 +3,4 @@ agents/evidence/claims.json
 samples/*_completed.xlsx
 __pycache__/
 *.pyc
+out/
