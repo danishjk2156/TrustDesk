@@ -158,10 +158,12 @@ figure disagrees with a room document (e.g. your 72-hour breach promise vs the m
   release gate still applies.
 
 ### 4. Post the summary
+Run `python tools/trust_score.py work/answers.json` from the repo root and put its line second.
 Post one summary in the thread, in this format:
 
 ```
 TrustDesk review: acme_questionnaire.xlsx (41 questions, due 2026-11-07)
+Trust score 77% proven from code (30/39 factual answers) · 2 policy claims contradicted · 0 stale · 1 open conflicts · 0/41 approved
 ✅ 30 VERIFIED   ⚠️ 9 NEEDS-EVIDENCE   📝 2 COMMITMENT
 
 🚨 Policy contradicted by code (2):

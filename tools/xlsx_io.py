@@ -22,7 +22,18 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
 
 REQUIRED = ("id", "question")
-OUTPUT_COLUMNS = ("Answer", "Label", "Evidence", "Approved by")
+OUTPUT_COLUMNS = ("Answer", "Label", "Evidence", "Approved by", "Frameworks")
+
+
+def _framework_label(control):
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    try:
+        from frameworks import label  # tools/frameworks.py, next to this file
+    except ImportError:
+        return None
+    return label(control) or None
 
 
 def _header_map(ws) -> dict[str, int]:
@@ -106,6 +117,7 @@ def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | 
             "Label": a.get("label"),
             "Evidence": "\n".join(evidence) if evidence else None,
             "Approved by": a.get("approved_by"),
+            "Frameworks": _framework_label(a.get("control")),
         }
         for name, value in values.items():
             cell = ws.cell(row=r, column=out_cols[name], value=value)
