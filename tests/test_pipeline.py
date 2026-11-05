@@ -93,7 +93,7 @@ class Pipeline(unittest.TestCase):
 
     def test_stale_run_cannot_pass_for_the_new_sheet(self):
         """Yesterday's 40-answer run must not clear today's 41-question sheet."""
-        old = json.loads((ROOT / "docs" / "example-run" / "answers.json").read_text(encoding="utf-8"))
+        old = json.loads((ROOT / "tests" / "fixtures" / "run-40q-answers.json").read_text(encoding="utf-8"))
         report = check_gates.check(old, self.ids)
         self.assertIn({"id": "Q41", "problem": "no answer record"}, report["problems"])
 

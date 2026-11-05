@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import check_gates  # noqa: E402
 
-RUN = json.loads((ROOT / "docs" / "example-run" / "answers.json").read_text(encoding="utf-8"))
-IDS = [a["id"] for a in RUN]  # the 40-question run recorded in docs/example-run
+RUN = json.loads((ROOT / "tests" / "fixtures" / "run-40q-answers.json").read_text(encoding="utf-8"))
+IDS = [a["id"] for a in RUN]  # the 40-question run recorded on Nov 5 (tests/fixtures)
 
 
 def record(answers, qid):
@@ -78,13 +78,23 @@ class Gates(unittest.TestCase):
 
     def test_cli_exit_codes(self):
         script = str(ROOT / "tools" / "check_gates.py")
-        ok = subprocess.run([sys.executable, script, str(ROOT / "docs/example-run/answers.json"),
-                             str(ROOT / "docs/example-run/acme_questionnaire_completed.xlsx")], capture_output=True)
+        ok = subprocess.run([sys.executable, script, str(ROOT / "tests/fixtures/run-40q-answers.json"),
+                             str(ROOT / "tests/fixtures/run-40q-completed.xlsx")], capture_output=True)
         self.assertEqual(ok.returncode, 0, ok.stdout)
-        blocked = subprocess.run([sys.executable, script, str(ROOT / "docs/example-run/answers.json"),
+        blocked = subprocess.run([sys.executable, script, str(ROOT / "tests/fixtures/run-40q-answers.json"),
                                   str(ROOT / "samples/acme_questionnaire.xlsx")], capture_output=True, text=True)
         self.assertEqual(blocked.returncode, 1)  # the 41-question sheet has a Q41 the old run never answered
         self.assertIn("Q41", blocked.stdout)
+
+    def test_published_example_run_passes_on_the_41_question_sheet(self):
+        """docs/example-run is what judges open; it must clear the real gate."""
+        script = str(ROOT / "tools" / "check_gates.py")
+        run = subprocess.run([sys.executable, script, str(ROOT / "docs/example-run/answers.json"),
+                              str(ROOT / "samples/acme_questionnaire.xlsx")], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout)
+        answers = json.loads((ROOT / "docs/example-run/answers.json").read_text(encoding="utf-8"))
+        verified = [a for a in answers if a["label"] == "VERIFIED"]
+        self.assertTrue(verified and all(a.get("permalinks") for a in verified))
 
 
 if __name__ == "__main__":
