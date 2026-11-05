@@ -111,7 +111,17 @@ The checker replies in the thread with:
 ```
 
 On reply:
-- `found` → label **VERIFIED**, copy `evidence` into the record exactly as given.
+- `found` → label **VERIFIED**, copy `evidence` into the record exactly as given, then apply
+  the **evidence-only wording rule**: a VERIFIED answer states only what its cited lines show.
+  Read each cited line; any detail it does not show (a cipher such as AES-256, "customer-managed",
+  "all regions", a number) comes out of the answer, or moves into a separate sentence that starts
+  "Per policy:" and names the document. Example: evidence `storage_encrypted = true` →
+  "Yes. Production database storage is encrypted at rest. Per policy (encryption-policy.md):
+  AES-256 with AWS KMS customer-managed keys." — not "Yes. … encrypted at rest with AES-256
+  using customer-managed keys." as if the code proved the cipher.
+  The same rule applies to answers reused from `answer-library.yaml`: if a library answer claims
+  more than its evidence, trim it and list it in the summary as "reworded from library" so the
+  Security Lead re-approves it.
 - `missing` → label **NEEDS-EVIDENCE**, keep the reason. Don't argue with the checker or re-word
   the answer to get around it.
 - `contradicted` → label **NEEDS-EVIDENCE**, keep the evidence and reason, and rewrite the answer

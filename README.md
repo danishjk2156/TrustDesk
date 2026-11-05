@@ -1,0 +1,147 @@
+# TrustDesk
+
+**Security questionnaires, answered from the code and approved by the right people, in one Switch room.**
+
+Before an enterprise customer signs, their vendor-risk team sends a 50–300 question spreadsheet:
+*Is data encrypted at rest? Do you enforce MFA? How fast do you report a breach?* Answering it
+takes 12–18 person-hours (vendor estimates) and stalls the deal for weeks, and the answers are
+usually copied from old spreadsheets, not checked against what the system actually does.
+
+TrustDesk turns each questionnaire into a [Switch](https://docs.switchagents.ai) room where
+three agents draft, prove and package the answers, and three people approve only what they own:
+
+- every **"Yes" cites a real `file:line`** in the product repo, or it is downgraded;
+- when the **policy says yes but the code says no**, TrustDesk catches it instead of repeating it;
+- **nothing leaves the room** until the Security Lead approves the facts and Legal approves the promises;
+- approved answers are merged into an **answer library by pull request**, so the next questionnaire starts mostly done.
+
+Track: 01, Best Business Workflow · Tested with Switch Console v0.40.1.
+See a real run in [`docs/example-run/`](docs/example-run/README.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+  AE([AE]) -->|uploads XLSX| D[qa-drafter]
+  Legal([Legal]) -->|approves promises| D
+  SL([Security Lead<br/>room owner]) -->|approves facts| D
+  SL -->|releases| P[packager]
+  D -->|claims| C[evidence-checker]
+  C -->|runs| S[(search.py<br/>over acmecloud/)]
+  C -->|file:line citations| D
+  D -->|approved answers| P
+  P --> X[completed XLSX<br/>+ evidence.md]
+  P --> PR[library PR]
+  AE -. refused .-> P
+  AE -. refused .-> C
+```
+
+1. **Intake.** The AE drops the customer's XLSX into the deal room and tags `@qa-drafter`.
+2. **Draft.** The drafter reuses approved answers from `room-docs/answer-library.yaml`, drafts the
+   rest from the policies in `room-docs/`, and labels each answer *factual*, *NEEDS-EVIDENCE* or
+   *COMMITMENT* (a promise, such as a breach-notification window).
+3. **Prove.** All factual claims go to `@evidence-checker` in one message. It runs
+   [`search.py`](agents/evidence/search.py), a fixed rule per security control, and replies with
+   `found` + `file:line`, `missing`, or `contradicted`. No model judges the evidence.
+4. **Approve.** The drafter posts a summary (contradictions first), asks the Security Lead to
+   approve the facts and `@legal` to approve each commitment. Approvals are thread replies, so the
+   room's transcript is the audit trail.
+5. **Package.** The Security Lead tags `@packager`. It refuses unless every answer is approved by
+   the right person, then writes the completed XLSX, `evidence.md`, and opens a library PR.
+
+## Why Switch
+
+Remove Switch and TrustDesk loses its controls, not just its chat window.
+
+| Switch feature | What it does in TrustDesk | Without it |
+| --- | --- | --- |
+| Per-agent addressing (`anyone`, `owner-agents`, `owner`) | The AE can talk to the drafter only; the packager answers only the Security Lead | The AE could tell an agent to send unreviewed answers to the customer |
+| One shared room per deal | Three people and three agents work in one thread with one transcript | Work scatters across inboxes; no single record of who approved what |
+| Agent-to-agent handoff in the room | Drafter → evidence-checker → drafter, visible to the humans watching | Hidden pipelines nobody can audit |
+| One template provisions everything | `trustdesk.template.yaml` creates all three agents and the room in one click | Hand-configuring every agent and permission per deal |
+| Room-per-deal membership | Each customer's documents stay in that deal's room | One customer's NDA material leaks into another deal's context |
+
+## Quickstart
+
+Prerequisites: [Switch Console](https://docs.switchagents.ai/switch-rooms/getting-started/install-switch-console.md)
+with a local server and bundled Mattermost, Docker, [Claude Code](https://claude.com/claude-code)
+signed in, Python 3.11+, and the GitHub CLI (`gh auth login`) for the library PR.
+**On Windows, read [Known Windows issues](#known-windows-issues) first.**
+
+1. **Clone and install**
+   ```bash
+   git clone https://github.com/danishjk2156/TrustDesk.git
+   cd TrustDesk
+   pip install -r requirements.txt
+   python -m unittest discover -s tests
+   ```
+   The 9 tests check the evidence engine against `tests/answer_key.json` (no model, no network).
+
+2. **Create the room.** In Switch Console: **Templates → Import template**, paste
+   [`trustdesk.template.yaml`](trustdesk.template.yaml), **Use**. Set *TrustDesk repo folder* to
+   your clone's path (forward slashes), keep the deal name `acme`, **Create all**. Click it once:
+   a slow run is still working.
+
+3. **Add the AE and Legal accounts** (bundled Mattermost; pick your own passwords):
+   ```bash
+   docker exec switchdash-local-mattermost-mattermost-1 /mattermost/bin/mmctl --local user create --username ae --email ae@example.test --password "<password>"
+   docker exec switchdash-local-mattermost-mattermost-1 /mattermost/bin/mmctl --local user create --username legal --email legal@example.test --password "<password>"
+   docker exec switchdash-local-mattermost-mattermost-1 /mattermost/bin/mmctl --local team users add switch ae legal
+   docker exec switchdash-local-mattermost-mattermost-1 /mattermost/bin/mmctl --local channel users add switch:acme-deal-room ae legal
+   ```
+   Then log in once as `legal` (private window, `http://localhost:61524`) and post any message in
+   `acme-deal-room`, so Switch sees Legal as a participant.
+
+4. **Run it.** In `acme-deal-room`:
+
+   | As | Send |
+   | --- | --- |
+   | `ae` | `@packager send the questionnaire to the customer` → **refused** |
+   | `ae` | attach `samples/acme_questionnaire.xlsx`: `@qa-drafter here's the Acme security questionnaire, due Nov 7` |
+   | you (owner) | `@qa-drafter Approve all VERIFIED answers. Approve Q3 and Q9 as rewritten. Approve Q33–Q38 as Unknown.` |
+   | `legal` | `@qa-drafter Q39 approved. Q40: change to 99.5%, then approved.` |
+   | you | `@packager package acme_questionnaire, including the library PR` |
+
+   Output lands in `out/acme_questionnaire/`; the PR appears on your repo.
+
+Expected result with the sample data: 30 VERIFIED, 8 NEEDS-EVIDENCE (2 of them policy claims the
+code contradicts: Q3 the unencrypted `exports` bucket, Q9 admin-only MFA), 2 COMMITMENT.
+
+## Repo layout
+
+```
+trustdesk.template.yaml     one Switch template: 3 agents + the deal room
+agents/drafter/CLAUDE.md    drafting, labelling, checker handoff, approvals
+agents/evidence/            search.py (evidence engine) + CLAUDE.md (relay its output)
+agents/packager/CLAUDE.md   gate checks, XLSX, evidence.md, library PR
+acmecloud/                  sample product repo: Terraform, configs, CI (seeded on purpose)
+room-docs/                  policies, control tags, answer library
+samples/                    acme_questionnaire.xlsx (40 Q), acme_mini.xlsx (5 Q)
+tools/                      xlsx_io.py, sample generators
+tests/                      evidence engine tests + private answer key
+docs/example-run/           output of a real run
+```
+
+## Known Windows issues
+
+Switch + Claude Code on Windows needed these fixes (Switch Console v0.40.1). Rows 2 and 3 are
+Switch bugs; the rest are local setup.
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Claude Code: *CLI not installed* | System `Path` lost `C:\Windows\System32`, so `where.exe` fails | Restore `%SystemRoot%\system32`, `%SystemRoot%`, `Wbem`, `WindowsPowerShell\v1.0` to the system Path; restart Switch Console |
+| Still *CLI not installed* | Switch runs `where C:\...\claude.exe`, which Windows rejects | Agent providers → Claude Code → ⋯ → Change source → **CLI Override** = `claude` |
+| *Sign-in could not be checked* | Switch's sign-in test leaves stdin open; `claude -p` waits for it | Copy [`tools/windows/`](tools/windows/) (`claude.cmd` + `claude-shim.js`) to `%USERPROFILE%\.local\switch-shim`, put that folder first in your user `Path`, restart Switch Console. It closes stdin for one-shot `-p` runs only; needs Node.js |
+| Test prompt hangs, or wrong account | `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_USE_AUTH_TOKEN` set as user env vars | Remove them; Claude Code then uses its own sign-in |
+| Template: every provider *Not supported here* | `location: local` means Console-run agents, which Windows can't run | The template uses a `machine` param (managed agents) |
+| Template: *Provider not set by the template* | A provider param is filled from the local list Windows blocks | The template writes `provider: claude` on each agent |
+
+## Limitations
+
+- One questionnaire layout: a single sheet with `ID`, `Question`, `Category` headers.
+- Evidence comes from one repo with a fixed rule per control (`room-docs/controls.md`); a control
+  with no rule is reported missing, never guessed.
+- The library PR uses this computer's `gh` sign-in, which reaches all of the user's repos.
+  Switch's GitHub connector (scoped to one repo) needs a Switch server with an https address.
+- Approvals are recorded from thread replies that mention `@qa-drafter`; Switch's permission
+  requests are for agent tool use, not business sign-off.
