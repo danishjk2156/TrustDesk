@@ -7,7 +7,8 @@ only runs this script and posts its JSON.
 Input  (file path or stdin):  {"type": "claims", "claims": [{"id", "control", "claim"}]}
 Output (stdout):              {"type": "evidence", "results": [...]}
 
-Each result is one of:
+Each result is one of (results with evidence also carry "permalinks": GitHub links pinned to the
+current commit, one per citation, or null for a file with uncommitted changes):
   {"id", "control", "status": "found",        "evidence": ["<path>:<line>  <text>", ...]}
   {"id", "control", "status": "missing",      "reason": "..."}
   {"id", "control", "status": "contradicted", "evidence": [...], "reason": "..."}
@@ -19,8 +20,10 @@ Each result is one of:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -91,6 +94,7 @@ NOT_IN_CODE = {
     "endpoint_protection": "Endpoint protection on staff devices",
     "data_deletion": "Customer data deleted on request or contract end",
     "background_checks": "Background checks for staff",
+    "soc2_report": "Current SOC 2 Type II report",
 }
 
 
@@ -111,17 +115,68 @@ def _cite(repo: Path, hits) -> list[str]:
     return [f"{p.relative_to(base).as_posix()}:{n}  {text}" for p, n, text in hits]
 
 
+def _git(*args: str, cwd: Path) -> str | None:
+    try:
+        out = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+@functools.lru_cache(maxsize=None)
+def _github_base(repo: Path) -> tuple[str, str, Path] | None:
+    """(https://github.com/owner/name, commit sha, git top-level) for the repo, if it has one."""
+    top = _git("rev-parse", "--show-toplevel", cwd=repo)
+    sha = _git("rev-parse", "HEAD", cwd=repo)
+    url = _git("remote", "get-url", "origin", cwd=repo)
+    if not (top and sha and url):
+        return None
+    m = re.match(r"^(?:https://github\.com/|git@github\.com:)([\w.-]+/[\w.-]+?)(?:\.git)?/?$", url)
+    if not m:
+        return None
+    return f"https://github.com/{m.group(1)}", sha, Path(top)
+
+
+def _permalinks(repo: Path, hits) -> list[str | None] | None:
+    """Pin each hit to the commit, so a citation keeps pointing at what was proven."""
+    base = _github_base(repo)
+    if not base:
+        return None
+    url, sha, top = base
+    links = []
+    for p, n, _ in hits:
+        rel = p.resolve().relative_to(top.resolve()).as_posix()
+        links.append(f"{url}/blob/{sha}/{rel}#L{n}" if _committed(top, sha, rel) else None)
+    return links
+
+
+@functools.lru_cache(maxsize=None)
+def _committed(top: Path, sha: str, rel: str) -> bool:
+    """True when the file is tracked and has no uncommitted changes, so the link shows these lines."""
+    unchanged = _git("diff", "--quiet", "HEAD", "--", rel, cwd=top) is not None
+    tracked = _git("ls-files", "--error-unmatch", rel, cwd=top) is not None
+    return unchanged and tracked
+
+
+def _with_evidence(repo: Path, hits, **fields) -> dict:
+    result = {**fields, "evidence": _cite(repo, hits)}
+    links = _permalinks(repo, hits)
+    if links is not None:
+        result["permalinks"] = links
+    return result
+
+
 def _check_rule(repo: Path, rule: Rule) -> dict:
     bad = _line_hits(repo, rule.glob, rule.contradiction) if rule.contradiction else []
     if bad:
-        return {"status": "contradicted", "evidence": _cite(repo, bad),
-                "reason": f"The code says the opposite of: {rule.desc.lower()}"}
+        return _with_evidence(repo, bad, status="contradicted",
+                              reason=f"The code says the opposite of: {rule.desc.lower()}")
     hits = _line_hits(repo, rule.glob, rule.pattern)
     for extra in rule.require_all:
         if not _line_hits(repo, rule.glob, extra):
             hits = []
     if hits:
-        return {"status": "found", "evidence": _cite(repo, hits[:3])}
+        return _with_evidence(repo, hits[:3], status="found")
     return {"status": "missing", "reason": f"No match in {rule.glob} for: {rule.desc.lower()}"}
 
 
@@ -144,11 +199,10 @@ def _check_bucket_encryption(repo: Path) -> dict:
         return {"status": "missing", "reason": "No S3 buckets defined in terraform/"}
     unencrypted = [name for name in buckets if name not in encrypted]
     if unencrypted:
-        return {"status": "contradicted",
-                "evidence": _cite(repo, [buckets[n] for n in unencrypted]),
-                "reason": f"{len(unencrypted)} of {len(buckets)} S3 buckets have no encryption configuration: "
-                          + ", ".join(unencrypted)}
-    return {"status": "found", "evidence": _cite(repo, list(buckets.values()))}
+        return _with_evidence(repo, [buckets[n] for n in unencrypted], status="contradicted",
+                              reason=f"{len(unencrypted)} of {len(buckets)} S3 buckets have no encryption "
+                                     f"configuration: " + ", ".join(unencrypted))
+    return _with_evidence(repo, list(buckets.values()), status="found")
 
 
 def check(control: str, repo: Path = DEFAULT_REPO) -> dict:

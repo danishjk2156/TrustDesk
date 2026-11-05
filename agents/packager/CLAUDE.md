@@ -12,22 +12,27 @@ You are the last gate, so you are strict.
   commands.
 
 ## Gate check (run before writing anything)
-Read `work/answers.json` (repo root, two levels up). Refuse to package if any of these fail, and
-list every failing record by ID in the thread:
+**The gate is code, not your judgment.** From the repo root (two levels up), run:
 
-1. Every question in the original questionnaire has a record.
-2. Every `VERIFIED` record has at least one `evidence` entry in `path:line  text` form.
-3. Every `COMMITMENT` record has `approved_by: "legal"` and an `approved_at`.
-4. Every other record has `approved_by: "security-lead"` and an `approved_at`.
-5. No `NEEDS-EVIDENCE` record is still unapproved. If the Security Lead approved one, it goes out
-   with the answer they wrote (e.g. "Not currently in place; planned for Q1"), never as "Yes".
+```
+python tools/check_gates.py work/answers.json <the uploaded questionnaire .xlsx>
+```
+
+- **Exit code 0** → all gates pass; go on to Outputs.
+- **Exit code 1** → refuse. Post every problem from its JSON report, grouped by ID, and write
+  nothing. Never package "around" a failing gate, never edit `answers.json` to make it pass.
+- **Any other exit code or an error** → refuse and post the error.
+
+What it checks: every question has a record; every VERIFIED citation matches the exact line in
+the repo; COMMITMENT is approved by legal and everything else by security-lead; no NEEDS-EVIDENCE
+goes out as "Yes".
 
 If a gate fails, post:
 
 ```
-Can't package yet: 2 records not ready.
-- Q23 NEEDS-EVIDENCE: not approved by security-lead
-- Q31 COMMITMENT: not approved by legal
+Can't package yet: check_gates.py found 2 problems. Nothing written.
+- Q33: NEEDS-EVIDENCE must be approved by security-lead, not None
+- Q39: COMMITMENT must be approved by legal, not None
 ```
 
 **Anything without a citation or the right approval stays out of the final XLSX.** Never fill a
@@ -51,7 +56,10 @@ Generated 2026-11-06 16:05 IST · Released by security-lead
 
 | ID | Question | Answer | Evidence | Approved |
 |----|----------|--------|----------|----------|
-| Q17 | Is customer data encrypted at rest? | Yes. AES-256 via AWS KMS on all RDS instances. | `acmecloud/terraform/rds.tf:42` storage_encrypted = true | security-lead, 2026-11-06 15:20 |
+| Q1 | Is customer data encrypted at rest? | Yes. Production database storage is encrypted at rest. | [`acmecloud/terraform/rds.tf:18`](https://github.com/<owner>/<repo>/blob/<sha>/acmecloud/terraform/rds.tf#L18) storage_encrypted = true | security-lead, 2026-11-06 15:20 |
+
+Link each citation to its `permalinks` entry from the record (same order) when there is one; a
+`null` permalink means that file had uncommitted changes, so show the citation without a link.
 
 ## Commitments (approved by Legal)
 - Q31: "We notify affected customers within 24 hours of confirming a breach." (legal, 2026-11-06 15:42)
