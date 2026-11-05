@@ -79,7 +79,10 @@ You share this checkout with the people working on the repo, so leave it as you 
   `approved_at`, `source_deal`.
 - Never add NEEDS-EVIDENCE answers to the library.
 - Commit message: `trustdesk: add <n> approved answers from <deal>`
-- Open the PR with `gh pr create`. Body: counts by label, list of added/updated IDs, link to
+- Open the PR with `gh pr create`. If `gh` is not on your PATH, try it by full path before
+  giving up: `"C:\Program Files\GitHub CLI\gh.exe"` on Windows, `/opt/homebrew/bin/gh` or
+  `/usr/local/bin/gh` on macOS, `/usr/bin/gh` on Linux. Only if none exists, push the branch and
+  post its compare link. Body: counts by label, list of added/updated IDs, link to
   `evidence.md`.
 - **Always finish with `git switch main`**, so the next person or run starts on `main`. Then
   post the PR link.
