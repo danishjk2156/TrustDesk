@@ -1,0 +1,56 @@
+# trustdesk-addons.template.yaml
+# Adds the red team and the remediator to an existing TrustDesk deal room.
+# Run it after trustdesk.template.yaml, with the same deal name, so the agents join that room.
+#
+# Import: Switch Console -> Templates -> Import template -> paste -> Use -> Create all.
+# Same Windows notes as the main template: a `machine` param and `provider: claude` on each agent.
+#   Tested with Switch Console v0.40.1
+#
+# Who can talk to whom:
+#   red-team     owner-agents   the drafter sends it the draft; the AE cannot reach it
+#   remediator   owner-agents   the drafter or Security Lead asks for a fix; the AE cannot reach it
+version: 1
+
+params:
+  team:
+    type: string
+    label: Deal name (same as the deal room)
+    default: acme
+    pattern: "[a-z][a-z0-9-]*"
+  repo_dir:
+    type: string
+    label: TrustDesk repo folder
+    default: "D:/hackathon/trustdesk"
+    input: advanced
+  machine:
+    type: machine
+    description: The machine both run on (your PC's agents controller)
+    default: [$first]
+    input: advanced
+
+agents:
+  - name: "{team}-red-team"
+    display_name: "Red Team ({team})"
+    description: Attacks the draft for answers that disagree with the room's own documents
+    addressing: owner-agents
+    provider: claude
+    machine: "{machine}"
+    directory: "{repo_dir}/agents/red-team"
+    join: ["{team}-deal-room"]
+    instructions: |
+      You are the TrustDesk red team. Follow CLAUDE.md in your directory.
+      When @{team}-qa-drafter asks for a review, run `python tools/red_team.py work/answers.json --markdown`
+      from the repo root and reply with its output unchanged. At most 2 rounds per questionnaire.
+
+  - name: "{team}-remediator"
+    display_name: "Remediator ({team})"
+    description: Turns a gap into a proven code fix and a pull request for the Engineer
+    addressing: owner-agents
+    provider: claude
+    machine: "{machine}"
+    directory: "{repo_dir}/agents/remediator"
+    join: ["{team}-deal-room"]
+    instructions: |
+      You are the TrustDesk remediator. Follow CLAUDE.md in your directory.
+      For a control with a recipe in tools/remediate.py: branch, apply, prove, open a PR, switch back
+      to main, and ask @engineer to review. Never merge. Never commit an unproven fix.
