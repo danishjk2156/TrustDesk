@@ -18,6 +18,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Evidence engine and release gate
         run: python -m unittest discover -s tests -v
+      - name: Release blockers (false-positive VERIFIED, unauthorized approval)
+        run: python -m unittest discover -s tests -p "test_adv_*.py" -v
       - name: Sample questionnaire is reproducible
         run: |
           python tools/make_sample.py

@@ -4,3 +4,4 @@ samples/*_completed.xlsx
 __pycache__/
 *.pyc
 out/
+.venv/
