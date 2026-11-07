@@ -7,4 +7,10 @@
 #   github: alice-gh                      # login, for GitHub-review approvals
 #   roles: [security-lead]                # security-lead approves facts; legal approves COMMITMENT
 #   public_key: "<base64 Ed25519 key>"    # python tools/approvals.py keygen --out alice.key
-approvers: []
+approvers:
+  - id: sam
+    roles: [security-lead]
+    public_key: "UGchPMKiPxdo841COUwKX+PpVpCaQVZDReOIupMljmk="
+  - id: lee
+    roles: [legal]
+    public_key: "xfEPBdIxVUUXrFxERHiPvhKUiXa4rG1loLRyQKNYTm0="
