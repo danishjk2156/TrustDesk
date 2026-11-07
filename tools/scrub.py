@@ -50,7 +50,8 @@ def _strings(value):
     if isinstance(value, str):
         yield value
     elif isinstance(value, dict):
-        for v in value.values():
+        for k, v in value.items():
+            yield from _strings(k)
             yield from _strings(v)
     elif isinstance(value, (list, tuple)):
         for v in value:
@@ -59,15 +60,26 @@ def _strings(value):
         yield str(value)
 
 
+FILLERS = {"\u115f", "\u1160", "\u3164", "\uffa0", "\u2800", "\u180e", "\u034f"}  # render as blank but are letters or marks
+
+
+def _is_hidden(c: str) -> bool:
+    return (unicodedata.category(c) in ("Cc", "Cf", "Mn", "Me") or c in FILLERS) and c not in "\n\t"
+
+
 def _hidden_chars(value) -> bool:
-    return any(unicodedata.category(c) in ("Cc", "Cf") and c not in "\n\t" for t in _strings(value) for c in t)
+    return any(_is_hidden(c) for t in _strings(value) for c in t)
+
+
+def _fold(text: str) -> str:
+    """NFKD, then drop control, invisible, filler and combining characters, so neither a name nor an e-mail can be
+    disguised by marks or fillers. Applied to the text AND the customer names before they are compared."""
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not _is_hidden(c))
 
 
 def _visible(value) -> str:
-    """The text as a reader sees it: each string NFKC-normalised with control and invisible characters
-    removed BEFORE any serialising, so a name cannot be split and escapes cannot hide a separator."""
-    return "\n".join("".join(c for c in unicodedata.normalize("NFKC", t) if unicodedata.category(c) not in ("Cc", "Cf") or c in "\n\t")
-                     for t in _strings(value))
+    """The text as a reader sees it, each string folded BEFORE any serialising."""
+    return "\n".join(_fold(t) for t in _strings(value))
 
 
 def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
@@ -92,7 +104,7 @@ def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
         if any(not OWN_URL.match(u) for u in URL.findall(text)):
             problems.append(f"{field} contains a URL that is not a product-repo link")
         for name in customers:
-            if name.strip() and re.search(re.escape(unicodedata.normalize("NFKC", name.strip())), text, re.I):
+            if name.strip() and re.search(re.escape(_fold(name.strip())), text, re.I):
                 problems.append(f"{field} names the customer {name!r}")
     if problems:
         return None, problems

@@ -100,6 +100,15 @@ class Scrub(unittest.TestCase):
                 self.assertTrue(any("invisible" in p for p in problems))
                 self.assertTrue(any("names the customer" in p for p in problems), problems)
 
+    def test_dict_keys_combining_marks_and_fillers_cannot_hide_a_name(self):
+        cases = [("evidence", [{"Globex": "x"}]), ("answer", "Agreed with Glo\u0301bex"), ("answer", "Glo\u3164bex deal"),
+                 ("answer", "Gl\ufe0fobex"), ("answer", "Glo\u034fbex")]
+        for field, value in cases:
+            with self.subTest(repr(value)):
+                clean, problems = scrub.scrub({**self.ENTRY, field: value}, ["Globex"])
+                self.assertIsNone(clean)
+                self.assertTrue(problems)
+
     def test_every_free_text_field_is_checked_not_only_three(self):
         for field in ("approved_by", "control", "approved_at"):
             with self.subTest(field):
