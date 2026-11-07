@@ -84,29 +84,43 @@ TRAILING = ".,;:)\"'>]"
 URL_JUNK = set("<>[]{}|\\^`,;\"'")
 
 
+def _odd_whitespace(text: str) -> bool:
+    """Any space-like character other than space, tab, newline: different parsers split on different ones."""
+    return any((c.isspace() or unicodedata.category(c) in ("Zs", "Zl", "Zp")) and c not in " \t\n" for c in text)
+
+
 def _bad_email(text: str) -> bool:
     """True if any token looks like an e-mail address and is not plain ASCII at one of our own domains.
-    A token is e-mail-like when it has an @ and a host that ends in letters (`.com`) or holds non-ASCII
-    characters; `codeql-action@v3` and `trivy-action@0.24.0` are not."""
+    A token is e-mail-like when it has an @ and a host holding a `.letters` label or non-ASCII characters
+    (anywhere, so `a@globex.com/x` counts); `codeql-action@v3` and `trivy-action@0.24.0` do not."""
+    if _odd_whitespace(text):
+        return True
     for token in text.split():
         if "@" not in token:
             continue
-        host = token.rsplit("@", 1)[1].rstrip(TRAILING)
-        if host.isascii() and not re.search(r"\.[A-Za-z]{2,}\Z", host):
+        if token.count("@") > 1:
+            return True
+        local, host = token.split("@")
+        host = host.rstrip(TRAILING)
+        if host.isascii() and not re.search(r"\.[A-Za-z]{2,}", host):
             continue
-        local = token.rsplit("@", 1)[0]
         if not (token.isascii() and host.lower() in OWN_DOMAINS and local):
             return True
     return False
 
 
 def _bad_url(text: str) -> bool:
-    """True if any `scheme://` occurrence is not a plain-ASCII https://github.com/ link, judged one by one."""
-    for m in re.finditer(r"://", text):
-        start = max(text.rfind(c, 0, m.start()) for c in " \t\n(\"'<[") + 1
-        token = text[start:].split()[0].rstrip(TRAILING)
+    """True if any `scheme://` is not a plain-ASCII https://github.com/ link. Every match comes from one
+    regex, and the count of `://` must equal the count of matches, so nothing is skipped."""
+    if _odd_whitespace(text):
+        return True
+    found = list(re.finditer(r"[A-Za-z][A-Za-z0-9+.-]*://\S*", text))
+    if len(found) != text.count("://") or len(found) != len(re.findall(r"://", text)):
+        return True
+    for m in found:
+        token = m.group(0).rstrip(TRAILING)
         parts = urlsplit(token)
-        if not token.isascii() or parts.scheme != "https" or parts.netloc != "github.com" or "://" in token[m.end() - start:] \
+        if not token.isascii() or parts.scheme != "https" or parts.netloc != "github.com" or token.count("://") > 1 \
                 or URL_JUNK & set(token):
             return True
     return False

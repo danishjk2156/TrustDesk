@@ -122,6 +122,12 @@ class Scrub(unittest.TestCase):
             with self.subTest(text):
                 self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
 
+    def test_email_with_a_path_suffix_double_at_and_odd_whitespace_are_refused(self):
+        for text in ("mail bob@globex.com/x", "mail bob@globex.com?x=1", "mail a@b@globex.com", "x\u2028https://evil.example/x",
+                     "see\u00a0https://evil.example", "mail bob@globex.com\u3000now", "(https://evil.example/x)https://github.com/o"):
+            with self.subTest(repr(text)):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
+
     def test_unicode_email_forms_are_refused_and_plain_own_mailbox_allowed(self):
         for text in ("mail j\u00fcrgen@globex.de", "mail anna@b\u00fccher.example", "mail a@globex.com.", "x@\uff47lobex.com"):
             with self.subTest(text):
