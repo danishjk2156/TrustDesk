@@ -2,27 +2,36 @@
 
 The packager must run this and package only on exit code 0.
 
-    python tools/check_gates.py work/answers.json samples/acme_questionnaire.xlsx
+    python tools/check_gates.py work/acme/answers.json samples/acme_questionnaire.xlsx --deal acme
 
-Checks every answer record against the questionnaire and the repo:
-  1. every question has exactly one record, and no record is for an unknown question
-  2. label is VERIFIED, NEEDS-EVIDENCE or COMMITMENT
-  3. VERIFIED has citations, and every citation's `path:line  text` matches that line in the repo
-     (a citation the evidence engine never produced cannot pass)
-  4. COMMITMENT is approved by legal; every other label by security-lead; approved_at is ISO 8601
-  5. NEEDS-EVIDENCE never goes out as "Yes"
+Checks every answer record against the questionnaire, the code and the approval ledger:
+  1. every question has exactly one record, no record is for an unknown question, and the record's
+     question text is the questionnaire's
+  2. label is VERIFIED, NEEDS-EVIDENCE or COMMITMENT; NEEDS-EVIDENCE never goes out as "Yes"
+  3. VERIFIED is re-proven now (tools/claims.py): the control fits the question, the verifier says
+     `found`, every citation is evidence for that control, and every number is supported
+  4. every answer has an authenticated approval from the right role (security-lead for facts, legal
+     for COMMITMENT) for the digest of THIS version of the answer and its evidence (tools/approvals.py)
+  5. no red-team conflict is open (an answer disagreeing with a room document needs its owner's approval)
 
-Prints a JSON report; exit 0 = all gates pass, 1 = blocked, 2 = bad input.
+`approved_by` inside an answer record is never read. Prints a JSON report; exit 0 = all gates pass,
+1 = blocked, 2 = bad input.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+import approvals  # noqa: E402
+import claims  # noqa: E402
+import red_team  # noqa: E402
+
 LABELS = {"VERIFIED", "NEEDS-EVIDENCE", "COMMITMENT"}
 CITE = re.compile(r"^(?P<path>[\w./-]+):(?P<line>\d+)  (?P<text>.+)$")
 
@@ -45,11 +54,35 @@ def _citation_problem(cite: str, root: Path) -> str | None:
     return None
 
 
-def check(answers: list[dict], question_ids: list[str], root: Path = ROOT) -> dict:
+def _same_text(a, b) -> bool:
+    return " ".join(str(a).split()) == " ".join(str(b).split())
+
+
+def _approval_problem(qid: str, role: str, digest: str, everything: list[approvals.Approval], rejected: list[str]) -> str:
+    mine = [a for a in everything if a.answer_id == qid]
+    if any(a.role == role and a.digest != digest for a in mine):
+        return f"approval is for a different version of this answer or its evidence; {role} must approve again"
+    why = next((r for r in rejected if r.startswith(f"{qid}:")), None)
+    return f"no authenticated approval from {role}" + (f" ({why.split(': ', 1)[1]})" if why else "")
+
+
+def check(answers: list[dict], question_ids: list[str], root: Path = ROOT, *, question_texts: dict[str, str] | None = None,
+          repo: Path | None = None, ledger: list[dict] | None = None, roster: dict | None = None, deal: str = "default",
+          now: datetime | None = None, github: approvals.GitHubSource | None = None, roster_sha256: str | None = None,
+          expect_roster_sha256: str | None = None) -> dict:
     problems: list[dict] = []
+    repo = (repo or claims.search.DEFAULT_REPO).resolve()
+    now = now or datetime.now(timezone.utc)
 
     def bad(qid, msg):
         problems.append({"id": qid, "problem": msg})
+
+    if expect_roster_sha256 and roster_sha256 != expect_roster_sha256:
+        bad("roster", "approver roster does not match the pinned hash; it may have been edited")
+    live, rejected = approvals.valid_approvals(ledger or [], roster or {}, deal, now, github)
+    index: dict[tuple[str, str], list[approvals.Approval]] = {}
+    for a in live:
+        index.setdefault((a.answer_id, a.digest), []).append(a)
 
     seen: dict[str, int] = {}
     for a in answers:
@@ -63,6 +96,8 @@ def check(answers: list[dict], question_ids: list[str], root: Path = ROOT) -> di
         elif count > 1:
             bad(qid, f"{count} records for one question")
 
+    digests: dict[str, str] = {}
+    approved: dict[str, dict] = {}
     for a in answers:
         qid, label = str(a.get("id")), a.get("label")
         if label not in LABELS:
@@ -70,40 +105,78 @@ def check(answers: list[dict], question_ids: list[str], root: Path = ROOT) -> di
             continue
         if not (a.get("answer") or "").strip():
             bad(qid, "empty answer")
-        if label == "VERIFIED":
-            evidence = a.get("evidence") or []
-            if not evidence:
-                bad(qid, "VERIFIED without a citation")
-            for cite in evidence:
-                msg = _citation_problem(cite, root)
-                if msg:
-                    bad(qid, msg)
+        if question_texts and qid in question_texts and not _same_text(a.get("question"), question_texts[qid]):
+            bad(qid, "question text differs from the questionnaire")
+            continue
+        subject = {**a, "question": (question_texts or {}).get(qid, a.get("question"))}
         if label == "NEEDS-EVIDENCE" and (a.get("answer") or "").strip().lower().startswith("yes"):
             bad(qid, 'NEEDS-EVIDENCE answer goes out as "Yes"')
-        approver = "legal" if label == "COMMITMENT" else "security-lead"
-        if a.get("approved_by") != approver:
-            bad(qid, f"{label} must be approved by {approver}, not {a.get('approved_by')!r}")
-        try:
-            datetime.fromisoformat(str(a.get("approved_at")))
-        except ValueError:
-            bad(qid, f"approved_at is not an ISO 8601 time: {a.get('approved_at')!r}")
+        if label == "VERIFIED":
+            for cite in a.get("evidence") or []:
+                if (msg := _citation_problem(cite, root)):
+                    bad(qid, msg)
+        found, proof = approvals.proof_of(subject, repo)
+        for msg in found:
+            bad(qid, msg)
+        digests[qid] = approvals.digest_of(subject, proof)
+        role = approvals.required_role(label)
+        granted = [x for x in index.get((qid, digests[qid]), []) if x.role == role]
+        if granted:
+            approved[qid] = {"approver": granted[0].approver, "role": role, "at": granted[0].at.isoformat()}
+        else:
+            bad(qid, _approval_problem(qid, role, digests[qid], live, rejected))
 
-    return {"ok": not problems, "checked": len(answers), "questions": len(question_ids), "problems": problems}
+    roles = {qid: {v["role"]} for qid, v in approved.items()}
+    for conflict in red_team.review([{**a, "question": (question_texts or {}).get(str(a.get("id")), a.get("question"))}
+                                     for a in answers], roles)["conflicts"]:
+        bad(conflict["id"], f"open red-team conflict: {conflict['ask']}")
+
+    return {"ok": not problems, "checked": len(answers), "questions": len(question_ids), "problems": problems,
+            "digests": digests, "approvals": approved, "roster_sha256": roster_sha256,
+            "rejected_approvals": rejected}
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print(__doc__)
-        return 2
-    sys.path.insert(0, str(ROOT / "tools"))
+def evaluate(answers_path, questionnaire, deal: str | None = None, *, ledger: str | None = None, roster_path: str | None = None,
+             roster_sha256: str | None = None, repo: Path | None = None, verify_github: bool = False) -> tuple[dict, list[dict]]:
+    """Load everything from disk and run `check`. Shared by the CLI and the MCP server."""
     from xlsx_io import read_questions
 
-    answers = json.loads(Path(argv[0]).read_text(encoding="utf-8"))
-    ids = [q["id"] for q in read_questions(argv[1])]
-    report = check(answers, ids)
+    answers_path = Path(answers_path)
+    deal = deal or answers_path.resolve().parent.name
+    if not approvals.DEAL_ID.match(deal):
+        raise ValueError(f"bad deal id {deal!r}: use lowercase letters, digits, - or _")
+    answers = json.loads(answers_path.read_text(encoding="utf-8"))
+    questions = read_questions(questionnaire)
+    roster_file = Path(roster_path) if roster_path else approvals.ROSTER
+    roster, roster_hash = approvals.load_roster(roster_file) if roster_file.is_file() else ({}, None)
+    entries, ledger_problems = approvals.read_ledger(Path(ledger) if ledger else answers_path.with_name("approvals.jsonl"))
+    report = check(answers, [q["id"] for q in questions], question_texts={q["id"]: q["question"] for q in questions},
+                   repo=repo, ledger=entries, roster=roster, deal=deal, roster_sha256=roster_hash,
+                   expect_roster_sha256=roster_sha256, github=approvals.GitHubSource() if verify_github else None)
+    report["rejected_approvals"] += ledger_problems
+    return report, answers
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("answers")
+    ap.add_argument("questionnaire")
+    ap.add_argument("--deal", help="deal id (default: the answers file's folder name)")
+    ap.add_argument("--ledger", help="approvals.jsonl (default: next to the answers file)")
+    ap.add_argument("--roster", default=str(approvals.ROSTER))
+    ap.add_argument("--roster-sha256", help="pinned hash of the roster; the gate fails if the file differs")
+    ap.add_argument("--repo", type=Path, default=claims.search.DEFAULT_REPO)
+    ap.add_argument("--verify-github", action="store_true", help="confirm GitHub-review approvals with the gh CLI")
+    args = ap.parse_args(argv)
+    try:
+        report, _ = evaluate(args.answers, args.questionnaire, args.deal, ledger=args.ledger, roster_path=args.roster,
+                             roster_sha256=args.roster_sha256, repo=args.repo, verify_github=args.verify_github)
+    except (OSError, ValueError) as exc:
+        print(f"check_gates: {exc}", file=sys.stderr)
+        return 2
     print(json.dumps(report, indent=2))
     return 0 if report["ok"] else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

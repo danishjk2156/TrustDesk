@@ -1,0 +1,8 @@
+# Who may approve what. Change this file only through a reviewed pull request (CODEOWNERS).
+# The release gate can pin its hash: check_gates.py --roster-sha256 <hash>.
+#
+# - id: alice
+#   github: alice-gh                      # login, for GitHub-review approvals
+#   roles: [security-lead]                # security-lead approves facts; legal approves COMMITMENT
+#   public_key: "<base64 Ed25519 key>"    # python tools/approvals.py keygen --out alice.key
+approvers: []

@@ -6,11 +6,11 @@ case-insensitively but must be exactly ID / Question / Category.
 
 Python API (used by the drafter and packager):
     read_questions(path) -> list of {"id", "question", "category", "row"}
-    write_answers(path, answers, out_path=None) -> out_path
+    write_answers(path, answers, out_path=None, approvals=None) -> out_path   # approvals: check_gates report["approvals"]
 
 CLI (handy for agents):
     python tools/xlsx_io.py read  samples/acme_mini.xlsx
-    python tools/xlsx_io.py write samples/acme_mini.xlsx work/answers.json [out.xlsx]
+    python tools/xlsx_io.py write samples/acme_mini.xlsx work/answers.json [out.xlsx [gate-report.json]]
 """
 from __future__ import annotations
 
@@ -74,12 +74,20 @@ def read_questions(path: str | Path) -> list[dict]:
     return questions
 
 
-def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | None = None) -> Path:
+def _approver_label(approval: dict | None) -> str | None:
+    return f"{approval['approver']} ({approval['role']}), {approval['at'][:10]}" if approval else None
+
+
+def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | None = None,
+                  approvals: dict | None = None) -> Path:
     """Copy the questionnaire and fill Answer / Label / Evidence / Approved by.
 
     `answers` are TrustDesk answer records (see agents/drafter/CLAUDE.md); matched to
     rows by `id`. Records without a matching row are an error, rows without a record
     are left blank. Keeps the customer's own columns and row order.
+
+    `approvals` is the release gate's `approvals` map ({id: {approver, role, at}}). "Approved by" is
+    filled from it only; the record's own `approved_by` is never written out.
     """
     path = Path(path)
     out_path = Path(out_path) if out_path else path.with_name(f"{path.stem}_completed.xlsx")
@@ -116,7 +124,7 @@ def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | 
             "Answer": a.get("answer"),
             "Label": a.get("label"),
             "Evidence": "\n".join(evidence) if evidence else None,
-            "Approved by": a.get("approved_by"),
+            "Approved by": _approver_label((approvals or {}).get(str(a["id"]))),
             "Frameworks": _framework_label(a.get("control")),
         }
         for name, value in values.items():
@@ -134,7 +142,8 @@ def _main(argv: list[str]) -> int:
         return 0
     if len(argv) >= 3 and argv[0] == "write":
         answers = json.loads(Path(argv[2]).read_text(encoding="utf-8"))
-        out = write_answers(argv[1], answers, argv[3] if len(argv) > 3 else None)
+        gate_report = json.loads(Path(argv[4]).read_text(encoding="utf-8")) if len(argv) > 4 else {}
+        out = write_answers(argv[1], answers, argv[3] if len(argv) > 3 else None, gate_report.get("approvals"))
         print(out)
         return 0
     print(__doc__)

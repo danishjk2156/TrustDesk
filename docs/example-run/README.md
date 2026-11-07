@@ -9,7 +9,7 @@ corrected the library in PR #2.
 | --- | --- |
 | `acme_questionnaire_completed.xlsx` | The packager's output: the customer's sheet + Answer, Label, Evidence, Approved by |
 | `evidence.md` | Evidence appendix: each answer with its citation linked to a GitHub permalink and its approval time |
-| `answers.json` | The drafter's answer records after all approvals (passes `tools/check_gates.py`) |
+| `answers.json` | The drafter's answer records as recorded on Nov 5 (self-asserted `approved_by`; the strict gate now refuses it: no signed ledger) |
 
 **Result:** 30 VERIFIED, 9 NEEDS-EVIDENCE, 2 COMMITMENT, all 41 matching `tests/answer_key.json`.
 

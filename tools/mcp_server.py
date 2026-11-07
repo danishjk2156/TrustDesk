@@ -92,11 +92,12 @@ def map_framework(control: str) -> dict:
 
 
 @mcp.tool()
-def check_release_gate(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx") -> dict:
-    """The packager's release gate: may this deal be packaged? Paths are relative to the repo."""
-    answers = json.loads(_in_repo(answers_path).read_text(encoding="utf-8"))
-    ids = [q["id"] for q in read_questions(_in_repo(questionnaire_path))]
-    return _gates.check(answers, ids)
+def check_release_gate(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+                       deal_id: str | None = None) -> dict:
+    """The packager's release gate: may this deal be packaged? Paths are relative to the repo. Approvals
+    come only from the signed ledger (approvals.jsonl next to the answers), never from the answers."""
+    report, _ = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    return report
 
 
 @mcp.tool()
@@ -109,15 +110,20 @@ def drift_check() -> dict:
 
 
 @mcp.tool()
-def red_team_review(answers_path: str = "work/answers.json") -> dict:
-    """Answers whose figures disagree with the room's own documents, and whether the owner approved."""
-    return _red_team.review(json.loads(_in_repo(answers_path).read_text(encoding="utf-8")))
+def red_team_review(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+                    deal_id: str | None = None) -> dict:
+    """Answers whose figures disagree with the room's own documents, and whether the owner approved
+    (judged from the signed ledger)."""
+    report, answers = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    return _red_team.review(answers, {k: {v["role"]} for k, v in report["approvals"].items()})
 
 
 @mcp.tool()
-def deal_trust_score(answers_path: str = "work/answers.json") -> dict:
-    """How much of a deal's questionnaire is proven from code, with stale and conflict counts."""
-    s = _trust.score(json.loads(_in_repo(answers_path).read_text(encoding="utf-8")))
+def deal_trust_score(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+                     deal_id: str | None = None) -> dict:
+    """How much of a deal's questionnaire is proven from code, with stale, conflict and approved counts."""
+    report, answers = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    s = _trust.score(answers, report["approvals"])
     return {**s, "summary": _trust.line(s)}
 
 

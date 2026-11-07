@@ -1,0 +1,7 @@
+# Trust-critical paths need a code-owner review. Replace @OWNER with the security lead's handle.
+/room-docs/approvers.yaml  @OWNER
+/tools/check_gates.py      @OWNER
+/tools/approvals.py        @OWNER
+/tools/claims.py           @OWNER
+/agents/evidence/          @OWNER
+/.github/                  @OWNER

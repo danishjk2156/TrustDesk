@@ -56,7 +56,9 @@ def _doc_figures(topic: dict) -> list[dict]:
     return hits
 
 
-def review(answers: list[dict]) -> dict:
+def review(answers: list[dict], approved: dict[str, set[str]] | None = None) -> dict:
+    """`approved` maps answer id to the roles with an authenticated approval (from the release gate).
+    Without it, the answer's own `approved_by` is read: fine for the drafter's early pass, never for release."""
     findings = []
     for a in answers:
         if a.get("label") not in ("VERIFIED", "COMMITMENT"):
@@ -74,7 +76,7 @@ def review(answers: list[dict]) -> dict:
                     continue
                 seen.add((hit["doc"], hit["figure"]))  # one finding per document figure
                 owner = "legal" if a.get("label") == "COMMITMENT" else "security-lead"
-                accepted = a.get("approved_by") == owner
+                accepted = owner in approved.get(str(a["id"]), set()) if approved is not None else a.get("approved_by") == owner
                 findings.append({
                     "id": a["id"], "topic": name, "kind": "accepted" if accepted else "conflict",
                     "answer_says": mine, "doc_says": hit["figure"], "where": f"{hit['doc']}:{hit['line']}",

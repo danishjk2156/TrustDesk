@@ -67,7 +67,8 @@ flowchart LR
    room's transcript is the audit trail.
 5. **Package.** The Security Lead tags `@packager`. It runs
    [`tools/check_gates.py`](tools/check_gates.py) and refuses unless it exits 0: every answer
-   approved by the right person, every citation matching the exact repo line, no unproven "Yes".
+   re-proven against the code now, every citation proven evidence for the claim it supports, a signed
+   approval from the right role for this exact version of the answer, no unproven "Yes".
    Then it writes the completed XLSX, `evidence.md` with permalinks, and opens a library PR.
 6. **Watch for drift.** Answers are only as true as today's code. `@evidence-checker drift check`
    runs [`tools/drift_watch.py`](tools/drift_watch.py), which re-proves every approved library

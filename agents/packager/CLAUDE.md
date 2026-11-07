@@ -15,7 +15,7 @@ You are the last gate, so you are strict.
 **The gate is code, not your judgment.** From the repo root (two levels up), run:
 
 ```
-python tools/check_gates.py work/answers.json <the uploaded questionnaire .xlsx>
+python tools/check_gates.py work/answers.json <the uploaded questionnaire .xlsx> --deal <deal-id> > work/gate.json
 ```
 
 - **Exit code 0** → all gates pass; go on to Outputs.
@@ -23,16 +23,20 @@ python tools/check_gates.py work/answers.json <the uploaded questionnaire .xlsx>
   nothing. Never package "around" a failing gate, never edit `answers.json` to make it pass.
 - **Any other exit code or an error** → refuse and post the error.
 
-What it checks: every question has a record; every VERIFIED citation matches the exact line in
-the repo; COMMITMENT is approved by legal and everything else by security-lead; no NEEDS-EVIDENCE
-goes out as "Yes".
+What it checks: every question has a record; every VERIFIED claim is re-proven against the code now,
+its control fits the question, every citation is evidence for that control and every number is
+supported; each answer has a signed approval in `approvals.jsonl` (from the roster, in the right role,
+for the digest of this exact answer and evidence, not expired or revoked): legal for COMMITMENT,
+security-lead for everything else; no NEEDS-EVIDENCE goes out as "Yes". `approved_by` in
+`answers.json` is never read. Write the workbook with the gate's own approvals:
+`python tools/xlsx_io.py write <questionnaire> work/answers.json <out.xlsx> work/gate.json`.
 
 If a gate fails, post:
 
 ```
 Can't package yet: check_gates.py found 2 problems. Nothing written.
-- Q33: NEEDS-EVIDENCE must be approved by security-lead, not None
-- Q39: COMMITMENT must be approved by legal, not None
+- Q33: no authenticated approval from security-lead
+- Q39: approval is for a different version of this answer or its evidence; legal must approve again
 ```
 
 **Anything without a citation or the right approval stays out of the final XLSX.** Never fill a
@@ -76,7 +80,7 @@ You share this checkout with the people working on the repo, so leave it as you 
 - Add only **new or changed** approved answers to `room-docs/answer-library.yaml`. Match existing
   entries by question meaning; update the entry rather than duplicating it.
 - Each entry keeps `question`, `answer`, `label`, `control`, `evidence`, `approved_by`,
-  `approved_at`, `source_deal`.
+  `approved_at` (copied from the gate report's `approvals`, never from `answers.json`), `source_deal`.
 - Never add NEEDS-EVIDENCE answers to the library.
 - Commit message: `trustdesk: add <n> approved answers from <deal>`
 - Open the PR with `gh pr create`. If `gh` is not on your PATH, try it by full path before

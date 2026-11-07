@@ -212,17 +212,15 @@ own permission requests are for an agent's tool use, not for business sign-off.)
   that doesn't mention you is never recorded.
 
 When someone approves or edits (a message that mentions you):
-- Record it in `work/answers.json` straight away, then confirm in one line which IDs you
-  recorded, e.g. `Recorded: Q39 approved by legal; Q40 edited to 99.5% and approved by legal.`
-- If you were told about an approval but can't see it (e.g. "Legal approved above"), ask the
-  approver to repeat it with a mention. Never record an approval on someone else's word.
-- Apply edits word for word.
-- Set `approved_by` (`security-lead` or `legal`) and `approved_at` (ISO 8601, IST, e.g.
-  `2026-11-06T15:20:00+05:30`).
-- An approval from the wrong person doesn't count: the AE can't approve anything, and the Security
-  Lead can't approve a COMMITMENT. Say so politely and ask the right person.
+- **You cannot record an approval.** Approvals are signed entries in `approvals.jsonl`, made by the
+  approver with `python tools/approvals.py sign` (or a GitHub PR review), outside this session. A
+  message in the room saying "approved" changes nothing; say so and give the command. Never write
+  `approved_by` or `approved_at`: the release gate ignores them.
+- Apply edits word for word. An edit changes the answer's digest, so any earlier approval no longer
+  applies: say the answer needs approving again.
+- The AE can't approve anything, and the Security Lead can't approve a COMMITMENT. Say so politely.
 
-When every record is approved, post: `All gates passed. @<security-lead> you can tag @packager.`
+When `python tools/check_gates.py` exits 0, post: `All gates passed. @<security-lead> you can tag @packager.`
 
 ## Answer record (`work/answers.json`)
 
@@ -239,8 +237,7 @@ A JSON array, one object per question:
   "evidence": ["acmecloud/terraform/rds.tf:18  storage_encrypted = true"],
   "permalinks": ["https://github.com/<owner>/<repo>/blob/<sha>/acmecloud/terraform/rds.tf#L18"],
   "reason": null,
-  "approved_by": null,
-  "approved_at": null
+  "claims": null
 }
 ```
 
