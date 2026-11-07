@@ -3,8 +3,8 @@
 Each test builds a tiny product repo that LOOKS like it satisfies a control and asserts the engine
 refuses. A failure here is a false-positive VERIFIED answer, which blocks release.
 
-The tests marked `expectedFailure` are known gaps in the regex engine, fixed by the structured
-verifier (Phase 1). When one is fixed it reports an "unexpected success": delete the decorator then.
+These three began as `expectedFailure` against the regex engine and now guard the structured verifier.
+More cases: test_adv_structured.py.
 
     python -m unittest discover -s tests -p "test_adv_*.py" -v
 """
@@ -34,12 +34,10 @@ class FalsePositives(unittest.TestCase):
         result = search.check(control, repo)
         self.assertNotEqual(result["status"], "found", f"false positive for {control}: {result}")
 
-    @unittest.expectedFailure
     def test_commented_out_setting_is_not_proof(self):
         repo = repo_with({"terraform/db.tf": 'resource "aws_db_instance" "main" {\n  # storage_encrypted = true\n}\n'})
         self.assertNotFound("db_encryption_at_rest", repo)
 
-    @unittest.expectedFailure
     def test_one_encrypted_database_does_not_cover_an_unencrypted_one(self):
         repo = repo_with({"terraform/db.tf": (
             'resource "aws_db_instance" "main" {\n  storage_encrypted = true\n}\n'
@@ -47,7 +45,6 @@ class FalsePositives(unittest.TestCase):
         result = search.check("db_encryption_at_rest", repo)
         self.assertEqual(result["status"], "contradicted", result)
 
-    @unittest.expectedFailure
     def test_setting_on_the_wrong_resource_type_is_not_proof(self):
         repo = repo_with({"terraform/other.tf": 'resource "aws_instance" "batch" {\n  multi_az = true\n}\n'})
         self.assertNotFound("multi_az", repo)

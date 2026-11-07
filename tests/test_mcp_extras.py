@@ -34,7 +34,9 @@ class TrustScore(unittest.TestCase):
     def test_published_run(self):
         s = trust_score.score(RUN)
         self.assertEqual((s["verified"], s["factual"], s["verified_pct"]), (30, 39, 77))
-        self.assertEqual((s["contradicted"], s["stale"], s["open_conflicts"]), (2, 0, 0))
+        # The Nov 5 run was recorded with the text-search engine. The structured verifier cites every
+        # resource a claim rests on, so 8 recorded citations are now narrower than what it would cite.
+        self.assertEqual((s["contradicted"], s["stale"], s["open_conflicts"]), (2, 8, 0))
         self.assertEqual((s["approved"], s["total"]), (41, 41))
         self.assertIn("77% proven from code", trust_score.line(s))
 

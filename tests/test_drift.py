@@ -51,7 +51,7 @@ class Drift(unittest.TestCase):
         stale = self.by_control(report)
         self.assertEqual(report["counts"]["STALE"], 1)
         self.assertEqual(stale["db_encryption_at_rest"]["status"], "STALE")
-        self.assertEqual(stale["db_encryption_at_rest"]["now"], "missing")
+        self.assertEqual(stale["db_encryption_at_rest"]["now"], "contradicted")  # the code now says false
 
     def test_a_new_line_above_only_moves_citations(self):
         self.edit("terraform/rds.tf", 'resource "aws_db_parameter_group"', '# tuned for prod\nresource "aws_db_parameter_group"')

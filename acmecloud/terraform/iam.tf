@@ -23,3 +23,12 @@ resource "aws_iam_policy" "require_mfa" {
   name   = "acmecloud-require-mfa"
   policy = file("${path.module}/../iam/mfa_policy.json")
 }
+
+resource "aws_iam_group" "admins" {
+  name = "acmecloud-admins"
+}
+
+resource "aws_iam_group_policy_attachment" "admins_require_mfa" {
+  group      = aws_iam_group.admins.name
+  policy_arn = aws_iam_policy.require_mfa.arn
+}

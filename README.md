@@ -51,8 +51,10 @@ flowchart LR
    rest from the policies in `room-docs/`, and labels each answer *factual*, *NEEDS-EVIDENCE* or
    *COMMITMENT* (a promise, such as a breach-notification window).
 3. **Prove.** All factual claims go to `@evidence-checker` in one message. It runs
-   [`search.py`](agents/evidence/search.py), a fixed rule per security control, and replies with
-   `found` + `file:line`, `missing`, or `contradicted`. No model judges the evidence.
+   [`search.py`](agents/evidence/search.py), a fixed check per security control over parsed
+   Terraform, YAML and JSON (comments, look-alike keys and settings on the wrong resource never
+   count), and replies with `found` + `file:line`, `missing`, `contradicted`, or `unverifiable` (a
+   variable, module or `count` stands in the way; never a pass). No model judges the evidence.
    **Red team** (add-on): before any human sees the draft, `@red-team` runs
    [`tools/red_team.py`](tools/red_team.py) and sends back every promise whose figure disagrees
    with a room document, such as the 72-hour breach policy against a marketing FAQ promising 24
@@ -196,8 +198,9 @@ Switch bugs; the rest are local setup.
 ## Limitations
 
 - One questionnaire layout: a single sheet with `ID`, `Question`, `Category` headers.
-- Evidence comes from one repo with a fixed rule per control (`room-docs/controls.md`); a control
-  with no rule is reported missing, never guessed.
+- Evidence comes from one repo with a fixed check per control (`room-docs/controls.md`); a control
+  with no check is reported missing, never guessed. Terraform modules are not followed: a repo that
+  uses them gets `unverifiable` for any "every resource" claim until module support lands.
 - The library PR uses this computer's `gh` sign-in, which reaches all of the user's repos.
   Switch's GitHub connector (scoped to one repo) needs a Switch server with an https address.
 - Approvals are recorded from thread replies that mention `@qa-drafter`; Switch's permission

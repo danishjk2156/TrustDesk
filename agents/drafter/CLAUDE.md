@@ -139,6 +139,10 @@ On reply:
   Security Lead re-approves it.
 - `missing` → label **NEEDS-EVIDENCE**, keep the reason. Don't argue with the checker or re-word
   the answer to get around it.
+- `unverifiable` → label **NEEDS-EVIDENCE**, keep the reason. The code uses a variable, module,
+  `count`/`for_each` or an unreadable file, so it does not settle the claim. Never label it
+  VERIFIED, and never state the value yourself.
+- Any status other than `found` is **NEEDS-EVIDENCE**. Only `found` can become VERIFIED.
 - `contradicted` → label **NEEDS-EVIDENCE**, keep the evidence and reason, and rewrite the answer
   to what the code actually shows (e.g. "Partially: 2 of 3 buckets are encrypted; the exports
   bucket is not."). Flag it at the top of the summary: the policy says one thing, the code another.

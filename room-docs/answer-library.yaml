@@ -39,7 +39,7 @@ answers:
     answer: "Yes. The load balancer has an HTTP 301 redirect rule. Per policy (encryption-policy.md): plain HTTP is redirected to HTTPS."
     label: VERIFIED
     control: https_redirect
-    evidence: ["acmecloud/terraform/alb.tf:31  status_code = \"HTTP_301\""]
+    evidence: ["acmecloud/terraform/alb.tf:27  type = \"redirect\"", "acmecloud/terraform/alb.tf:30  protocol    = \"HTTPS\"", "acmecloud/terraform/alb.tf:31  status_code = \"HTTP_301\""]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -55,7 +55,7 @@ answers:
     answer: "Yes. The database parameter group includes rds.force_ssl. Per policy (encryption-policy.md): connections from the application to the database require TLS."
     label: VERIFIED
     control: db_tls_required
-    evidence: ["acmecloud/terraform/rds.tf:6  name  = \"rds.force_ssl\""]
+    evidence: ["acmecloud/terraform/rds.tf:7  value = \"1\""]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -63,7 +63,7 @@ answers:
     answer: "Yes. An IAM policy conditions access on multi-factor authentication (aws:MultiFactorAuthPresent). Per policy (access-control-policy.md): MFA is always required for administrative access."
     label: VERIFIED
     control: mfa_admin
-    evidence: ["acmecloud/iam/mfa_policy.json:10  \"BoolIfExists\": { \"aws:MultiFactorAuthPresent\": \"false\" }"]
+    evidence: ["acmecloud/iam/mfa_policy.json:10  \"BoolIfExists\": { \"aws:MultiFactorAuthPresent\": \"false\" }", "acmecloud/terraform/iam.tf:33  policy_arn = aws_iam_policy.require_mfa.arn"]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -71,7 +71,7 @@ answers:
     answer: "Yes. Workforce sign-in is configured with Okta as the single sign-on provider."
     label: VERIFIED
     control: sso
-    evidence: ["acmecloud/configs/auth.yaml:3  provider: okta"]
+    evidence: ["acmecloud/configs/auth.yaml:3  provider: okta", "acmecloud/configs/auth.yaml:4  protocol: saml"]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -143,7 +143,7 @@ answers:
     answer: "Yes. A VPC flow log is configured."
     label: VERIFIED
     control: network_flow_logs
-    evidence: ["acmecloud/terraform/network.tf:6  resource \"aws_flow_log\" \"main\" {"]
+    evidence: ["acmecloud/terraform/network.tf:8  traffic_type    = \"ALL\""]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -172,10 +172,10 @@ answers:
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
   - question: "Is versioning enabled on storage that holds customer files?"
-    answer: "Yes. Versioning is enabled on two storage buckets."
+    answer: "Yes. Versioning is enabled on all three storage buckets."
     label: VERIFIED
     control: storage_versioning
-    evidence: ["acmecloud/terraform/s3.tf:38  status = \"Enabled\"", "acmecloud/terraform/s3.tf:45  status = \"Enabled\""]
+    evidence: ["acmecloud/terraform/s3.tf:38  status = \"Enabled\"", "acmecloud/terraform/s3.tf:45  status = \"Enabled\"", "acmecloud/terraform/s3.tf:76  status = \"Enabled\""]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -183,7 +183,7 @@ answers:
     answer: "Yes. Public ACL blocking is enabled on three storage buckets."
     label: VERIFIED
     control: storage_public_access_blocked
-    evidence: ["acmecloud/terraform/s3.tf:51  block_public_acls       = true", "acmecloud/terraform/s3.tf:59  block_public_acls       = true", "acmecloud/terraform/s3.tf:67  block_public_acls       = true"]
+    evidence: ["acmecloud/terraform/s3.tf:51  block_public_acls       = true", "acmecloud/terraform/s3.tf:52  block_public_policy     = true", "acmecloud/terraform/s3.tf:53  ignore_public_acls      = true", "acmecloud/terraform/s3.tf:54  restrict_public_buckets = true", "acmecloud/terraform/s3.tf:59  block_public_acls       = true", "acmecloud/terraform/s3.tf:60  block_public_policy     = true", "acmecloud/terraform/s3.tf:61  ignore_public_acls      = true", "acmecloud/terraform/s3.tf:62  restrict_public_buckets = true", "acmecloud/terraform/s3.tf:67  block_public_acls       = true", "acmecloud/terraform/s3.tf:68  block_public_policy     = true", "acmecloud/terraform/s3.tf:69  ignore_public_acls      = true", "acmecloud/terraform/s3.tf:70  restrict_public_buckets = true"]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
@@ -191,7 +191,7 @@ answers:
     answer: "Yes. A web application firewall (WAFv2) is associated with the public load balancer."
     label: VERIFIED
     control: waf
-    evidence: ["acmecloud/terraform/alb.tf:36  resource \"aws_wafv2_web_acl_association\" \"public\" {"]
+    evidence: ["acmecloud/terraform/alb.tf:37  resource_arn = aws_lb.public.arn"]
     approved_by: security-lead
     approved_at: "2026-11-05T23:52:53+05:30"
     source_deal: acme_questionnaire
