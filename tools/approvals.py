@@ -42,12 +42,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 import claims  # noqa: E402
 import red_team  # noqa: E402
 
-DEAL_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+DEAL_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}\Z")
 CLOCK_SKEW = timedelta(minutes=5)
 MAX_AGE = timedelta(days=30)
 ROSTER = ROOT / "room-docs" / "approvers.yaml"
-_REPO = re.compile(r"^[A-Za-z0-9_-][\w.-]*/[A-Za-z0-9_-][\w.-]*$")  # no segment made only of dots
-_SHA = re.compile(r"^[0-9a-f]{40}$")
+_REPO = re.compile(r"^[A-Za-z0-9_-][\w.-]*/[A-Za-z0-9_-][\w.-]*\Z")  # no segment made only of dots
+_SHA = re.compile(r"^[0-9a-f]{40}\Z")
 
 
 def required_role(label: str) -> str:
@@ -173,8 +173,12 @@ class GitHubSource:
         r = json.loads(out)
         pr = json.loads(subprocess.run(["gh", "api", f"repos/{ref['repo']}/pulls/{int(ref['pr'])}"],
                                        capture_output=True, text=True, timeout=30, check=True).stdout)
+        compare = json.loads(subprocess.run(["gh", "api", f"repos/{ref['repo']}/compare/{ref['commit']}...main"],
+                                            capture_output=True, text=True, timeout=30, check=True).stdout)
         return {"login": (r.get("user") or {}).get("login"), "state": r.get("state"), "commit_id": r.get("commit_id"),
-                "submitted_at": r.get("submitted_at"), "merged": bool(pr.get("merged")), "base": (pr.get("base") or {}).get("ref")}
+                "submitted_at": r.get("submitted_at"), "merged": bool(pr.get("merged")), "base": (pr.get("base") or {}).get("ref"),
+                "head_sha": (pr.get("head") or {}).get("sha"),
+                "on_main": compare.get("status") in ("behind", "identical")}  # the reviewed commit is an ancestor of main
 
     def digests(self, ref: dict, deal: str) -> dict:
         path = f"approvals/digests-{deal}.json"
@@ -233,6 +237,8 @@ def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | No
             return None, "GitHub review is not an approval by that person on that commit"
         if not review.get("merged") or review.get("base") != "main":
             return None, "the reviewed PR is not merged into main"
+        if review.get("head_sha") != ref["commit"] or not review.get("on_main"):
+            return None, "the reviewed commit is not what was merged into main (commits were added after the review)"
         if manifest.get(entry.get("answer_id")) != entry.get("digest"):
             return None, "the reviewed commit does not list this digest"
         at = _parse_time(review["submitted_at"])

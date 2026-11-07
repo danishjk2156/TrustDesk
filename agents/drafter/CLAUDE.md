@@ -51,7 +51,7 @@ Paths are relative to the repo root (two levels up from this directory).
 | `room-docs/answer-library.yaml` | Previously approved answers; reuse these first |
 | `room-docs/*-policy.md`, `room-docs/service-levels.md` | Policies: encryption, access control, incident response, service levels |
 | `room-docs/controls.md` | The control tags the evidence-checker understands |
-| `work/answers.json` | **You own this file.** The current answer records for this deal |
+| `work/<deal-id>/answers.json` | **You own this file.** The current answer records for this deal |
 
 The uploaded questionnaire is the XLSX attached to the AE's message.
 <!-- DAY 2 TODO (Person A): confirm where Switch saves message attachments and put the path here. -->
@@ -63,7 +63,7 @@ When the AE uploads a questionnaire:
 - Confirm in the thread: file name, number of questions, the due date (ask if not given).
 - Parse it with `read_questions`. If parsing fails, say which row or column broke and stop.
 - **Every upload starts a fresh record set**, even a new version of the same questionnaire.
-  If `work/answers.json` exists, move it to `work/archive/<YYYYMMDD-HHMM>-answers.json` first.
+  If `work/<deal-id>/answers.json` exists, move it to `work/<deal-id>/archive/<YYYYMMDD-HHMM>-answers.json` first.
   Never carry answers, evidence or approvals over from an earlier run: an approval covers the
   exact answer someone saw, so every answer is proven again and approved again. The only thing
   reused across runs is `answer-library.yaml` (step 2), and even library answers are re-checked.
@@ -92,7 +92,7 @@ For each question, in order:
 5. Send a claim even when the policy already says yes. Policies can be wrong; the checker
    proves it from the code.
 
-Write every record to `work/answers.json` (format below).
+Write every record to `work/<deal-id>/answers.json` (format below).
 
 ### 3. Hand off to the evidence-checker
 Send **one** batched message to `@evidence-checker` with all factual claims, as a fenced JSON block:
@@ -149,8 +149,8 @@ On reply:
   The code wins over the policy, always.
 
 ### 3b. Red-team review (before any human sees the draft)
-Once every factual answer has its evidence, write `work/answers.json` and ask `@red-team` in the
-thread: `@red-team please review work/answers.json`. It replies with conflicts: an answer whose
+Once every factual answer has its evidence, write `work/<deal-id>/answers.json` and ask `@red-team` in the
+thread: `@red-team please review work/<deal-id>/answers.json`. It replies with conflicts: an answer whose
 figure disagrees with a room document (e.g. your 72-hour breach promise vs the marketing FAQ's
 24 hours).
 - For each conflict, **fix it** if a policy owned by the Security Lead or Legal settles it (a
@@ -162,7 +162,7 @@ figure disagrees with a room document (e.g. your 72-hour breach promise vs the m
   release gate still applies.
 
 ### 4. Post the summary
-Run `python tools/trust_score.py work/answers.json` from the repo root and put its line second.
+Run `python tools/trust_score.py work/<deal-id>/answers.json` from the repo root and put its line second.
 Post one summary in the thread, in this format:
 
 ```
@@ -222,7 +222,7 @@ When someone approves or edits (a message that mentions you):
 
 When `python tools/check_gates.py` exits 0, post: `All gates passed. @<security-lead> you can tag @packager.`
 
-## Answer record (`work/answers.json`)
+## Answer record (`work/<deal-id>/answers.json`)
 
 A JSON array, one object per question:
 

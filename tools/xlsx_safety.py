@@ -15,11 +15,13 @@ Everything raises `UnsafeWorkbook` (a ValueError) so callers fail closed.
 from __future__ import annotations
 
 import re
+import unicodedata
 import zipfile
 from pathlib import Path
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
-MAX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024
+MAX_UNCOMPRESSED_BYTES = 20 * 1024 * 1024
+MAX_COLUMNS = 100
 MAX_ENTRIES = 200
 MAX_RATIO = 100
 MAX_ROWS = 2000
@@ -29,7 +31,7 @@ MAX_CELL_CHARS = 32000  # Excel's own limit is 32767
 FORBIDDEN_ENTRY = re.compile(r"(^|/)(vbaProject\.bin|externalLinks/|embeddings/|activeX/|oleObject\d*\.bin)", re.I)
 FORBIDDEN_SUFFIX = {".xlsm", ".xlsb", ".xltm", ".xls"}
 FORBIDDEN_TYPE = re.compile(r"macroEnabled|vbaProject|oleObject|activeX", re.I)
-ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,31}")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f‪-‮⁦-⁩]")  # incl. bidi overrides
 FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
 
@@ -77,29 +79,58 @@ def check_file(path: str | Path) -> None:
 
 def valid_id(value) -> str:
     text = "" if value is None else str(value).strip()
-    if not ID_PATTERN.match(text):
+    if not ID_PATTERN.fullmatch(text):
         raise UnsafeWorkbook(f"question ID {text[:40]!r} must be 1-32 letters, digits, '.', '_' or '-'")
     return text
 
 
+def _normalise(value) -> str:
+    """NFKC, then drop control and invisible format characters (zero-width, soft hyphen, bidi). Keeps \n and \t.
+    shortcut: look-alike letters from other scripts (Cyrillic 'о') survive NFKC; upgrade to a confusables map if needed."""
+    text = unicodedata.normalize("NFKC", str(value))
+    return "".join(c for c in text if c in "\n\t" or unicodedata.category(c) not in ("Cc", "Cf"))
+
+
+def _has_hidden_chars(value) -> bool:
+    return any(unicodedata.category(c) in ("Cc", "Cf") and c not in "\n\t\r" for c in str(value))
+
+
 def clean_text(value, limit: int = MAX_QUESTION_CHARS) -> str:
-    text = CONTROL_CHARS.sub("", str(value)).strip()
+    text = _normalise(value).strip()
     if len(text) > limit:
         raise UnsafeWorkbook(f"cell text is {len(text)} characters; the limit is {limit}")
     return text
 
 
 def flags_for(raw) -> list[str]:
-    """Why this question text needs a person's eye. Never changes the text."""
-    text = str(raw)
+    """Why this text needs a person's eye. Judged on the normalised text, so invisible characters cannot
+    split a phrase. Never changes the text."""
+    text = " ".join(_normalise(raw).split())
     flags = []
-    if text.lstrip().startswith(("=", "+", "@")):
+    if text.startswith(("=", "+", "@")):
         flags.append("formula")
     if INJECTION.search(text):
         flags.append("instruction-like text")
-    if CONTROL_CHARS.search(text):
+    if _has_hidden_chars(raw):
         flags.append("control or bidi characters removed")
     return flags
+
+
+def check_workbook_shape(path: str | Path, opener) -> None:
+    """Size limits and sheet states, judged before the workbook is fully loaded. `opener` is
+    openpyxl.load_workbook (passed in so this module stays free of the dependency)."""
+    wb = opener(path, read_only=True)
+    try:
+        for ws in wb.worksheets:
+            if ws.sheet_state != "visible":
+                raise UnsafeWorkbook(f"sheet {ws.title!r} is hidden; send a workbook with only visible sheets")
+            rows = sum(1 for _ in zip(range(MAX_ROWS + 2), ws.iter_rows(values_only=True)))  # bounded: stops early
+            if rows > MAX_ROWS + 1:
+                raise UnsafeWorkbook(f"sheet {ws.title!r} has more than {MAX_ROWS} rows")
+            if (ws.max_column or 0) > MAX_COLUMNS:
+                raise UnsafeWorkbook(f"sheet {ws.title!r} has {ws.max_column} columns; the limit is {MAX_COLUMNS}")
+    finally:
+        wb.close()
 
 
 def safe_cell(value):

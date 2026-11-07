@@ -121,7 +121,7 @@ class SpoofedApprovals(unittest.TestCase):
 
         class Fake:
             def review(self, ref):
-                return {"login": "mallory", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
+                return {"login": "mallory", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main", "head_sha": ref["commit"], "on_main": True}
 
             def digests(self, ref, deal):
                 return {"Q1": digest}
@@ -137,7 +137,7 @@ class SpoofedApprovals(unittest.TestCase):
 
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main", "head_sha": ref["commit"], "on_main": True}
 
             def digests(self, ref, deal):
                 return {"Q1": digest}
@@ -152,7 +152,7 @@ class SpoofedApprovals(unittest.TestCase):
 
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main", "head_sha": ref["commit"], "on_main": True}
 
             def digests(self, ref, deal):
                 return {"Q1": "f" * 64}
@@ -165,7 +165,7 @@ class SpoofedApprovals(unittest.TestCase):
     def blocked_with(self, e):
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main", "head_sha": ref["commit"], "on_main": True}
 
             def digests(self, ref, deal):
                 return {"Q1": "f" * 64}
@@ -183,7 +183,7 @@ class SpoofedApprovals(unittest.TestCase):
         class Fake:
             def review(self, ref):
                 return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(),
-                        "merged": True, "base": "main", **review}
+                        "merged": True, "base": "main", "head_sha": ref["commit"], "on_main": True, **review}
 
             def digests(self, ref, deal):
                 return {"Q1": digest}
@@ -202,6 +202,12 @@ class SpoofedApprovals(unittest.TestCase):
     def test_github_review_on_an_unmerged_pr_is_rejected(self):
         report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(merged=False), github_repo="o/r")
         self.assertTrue(any("not merged" in p for p in problems_for(report, "Q1")), report["problems"])
+
+    def test_github_review_of_a_commit_that_is_not_what_was_merged_is_rejected(self):
+        for change in ({"head_sha": "b" * 40}, {"on_main": False}):
+            with self.subTest(change):
+                report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(**change), github_repo="o/r")
+                self.assertTrue(any("not what was merged" in p for p in problems_for(report, "Q1")), report["problems"])
 
     def test_github_review_merged_into_another_branch_is_rejected(self):
         report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(base="feature"), github_repo="o/r")

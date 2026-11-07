@@ -69,13 +69,13 @@ class McpServer(unittest.TestCase):
 
     def test_release_gate_and_scores_over_mcp(self):
         # the recorded example run has no signed ledger, so the gate refuses it and nothing counts as approved
-        gate = mcp_server.check_release_gate("docs/example-run/answers.json", deal_id="example-run")
+        gate = mcp_server.check_release_gate("docs/example-run/answers.json")
         self.assertFalse(gate["ok"])
         self.assertEqual(gate["approvals"], {})
         self.assertEqual(mcp_server.drift_check()["counts"]["STALE"], 0)
-        score = mcp_server.deal_trust_score("docs/example-run/answers.json", deal_id="example-run")
+        score = mcp_server.deal_trust_score("docs/example-run/answers.json")
         self.assertEqual((score["verified_pct"], score["approved"]), (77, 0))
-        self.assertIn("conflicts", mcp_server.red_team_review("docs/example-run/answers.json", deal_id="example-run"))
+        self.assertIn("conflicts", mcp_server.red_team_review("docs/example-run/answers.json"))
 
     def test_paths_outside_the_repo_are_refused(self):
         with self.assertRaises(ValueError):

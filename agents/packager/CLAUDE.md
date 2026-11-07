@@ -15,7 +15,7 @@ You are the last gate, so you are strict.
 **The gate is code, not your judgment.** From the repo root (two levels up), run:
 
 ```
-python tools/check_gates.py work/answers.json <the uploaded questionnaire .xlsx> --deal <deal-id> > work/gate.json
+python tools/check_gates.py work/<deal-id>/answers.json <the uploaded questionnaire .xlsx> --deal <deal-id> > work/<deal-id>/gate.json
 ```
 
 - **Exit code 0** → all gates pass; go on to Outputs.
@@ -29,7 +29,7 @@ supported; each answer has a signed approval in `approvals.jsonl` (from the rost
 for the digest of this exact answer and evidence, not expired or revoked): legal for COMMITMENT,
 security-lead for everything else; no NEEDS-EVIDENCE goes out as "Yes". `approved_by` in
 `answers.json` is never read. Write the workbook with the gate's own approvals:
-`python tools/xlsx_io.py write <questionnaire> work/answers.json <out.xlsx> work/gate.json`.
+`python tools/xlsx_io.py write <questionnaire> work/<deal-id>/answers.json <out.xlsx> work/<deal-id>/gate.json`.
 
 If a gate fails, post:
 
@@ -77,6 +77,9 @@ You share this checkout with the people working on the repo, so leave it as you 
 - Before you start: `git status` must be clean and on `main`, and `git pull` first. If not, stop
   and tell the Security Lead what is uncommitted; never stash or discard someone's work.
 - Branch: `trustdesk/<deal>-library`, created from the latest `main`
+- Before adding anything, scrub it: `python tools/scrub.py <entries.json> --customer "<customer name>" --out <clean.json>`.
+  It drops fields the library does not define, anonymises `source_deal`, and refuses an entry that names the
+  customer or contains an e-mail, IP address or foreign URL (exit 1: fix or leave the entry out). Add only the scrubbed output.
 - Add only **new or changed** approved answers to `room-docs/answer-library.yaml`. Match existing
   entries by question meaning; update the entry rather than duplicating it.
 - Each entry keeps `question`, `answer`, `label`, `control`, `evidence`, `approved_by`,

@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.formatting.formatting import ConditionalFormattingList
+from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,7 +63,8 @@ def read_questions(path: str | Path) -> list[dict]:
     Duplicate or malformed IDs and oversized sheets are errors, never guesses.
     """
     xlsx_safety.check_file(path)
-    wb = load_workbook(path)  # not read-only: row visibility is needed
+    xlsx_safety.check_workbook_shape(path, load_workbook)
+    wb = load_workbook(path)  # not read-only: row and column visibility are needed
     try:
         ws = wb.active
         if ws.sheet_state != "visible":
@@ -85,23 +88,36 @@ def read_questions(path: str | Path) -> list[dict]:
             if ws.row_dimensions[row_idx].hidden:
                 flags.append("hidden row")
             category = ws.cell(row=row_idx, column=cols["category"]).value if "category" in cols else None
+            flags += [f"category: {f}" for f in xlsx_safety.flags_for(category)] if category else []
+            flags += [f"hidden column: {n}" for n, c in cols.items() if n in ("id", "question", "category") and _col_hidden(ws, c)]
             questions.append({"id": qid, "question": xlsx_safety.clean_text(raw_text),
                               "category": xlsx_safety.clean_text(category, 200) if category else None,
-                              "row": row_idx, "flags": flags})
+                              "row": row_idx, "flags": list(dict.fromkeys(flags))})
         return questions
     finally:
         wb.close()
 
 
-def _defuse_formulas(ws) -> None:
-    """The customer's own cells go back out too: any formula in them becomes plain text."""
-    for row in ws.iter_rows():
-        for cell in row:
-            if cell.data_type == "f" or (isinstance(cell.value, str) and cell.value.startswith("=")):
-                cell.value = xlsx_safety.safe_cell(str(cell.value))
-                cell.data_type = "s"
-            if cell.hyperlink:
-                cell.hyperlink = None
+def _defuse_workbook(wb) -> None:
+    """The customer's own content goes back out too: formulas become text, and links, defined names,
+    data validations and conditional formats (which can hold formulas) are removed."""
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.data_type == "f" or (isinstance(cell.value, str) and cell.value.startswith("=")):
+                    cell.value = xlsx_safety.safe_cell(str(cell.value))
+                    cell.data_type = "s"
+                if cell.hyperlink:
+                    cell.hyperlink = None
+        ws.data_validations.dataValidation = []
+        ws.conditional_formatting = ConditionalFormattingList()
+    for name in list(wb.defined_names):
+        del wb.defined_names[name]
+
+
+def _col_hidden(ws, column: int) -> bool:
+    dim = ws.column_dimensions.get(get_column_letter(column))
+    return bool(dim and dim.hidden)
 
 
 def _approver_label(approval: dict | None) -> str | None:
@@ -163,7 +179,7 @@ def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | 
             cell.value = xlsx_safety.safe_cell(value)
             cell.data_type = "s" if isinstance(cell.value, str) else cell.data_type  # never a formula
             cell.alignment = wrap
-    _defuse_formulas(ws)
+    _defuse_workbook(wb)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)

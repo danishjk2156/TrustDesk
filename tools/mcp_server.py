@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "agents" / "evidence"))
 import check_gates as _gates  # noqa: E402
+import deals as _deals  # noqa: E402
 import drift_watch as _drift  # noqa: E402
 import frameworks as _frameworks  # noqa: E402
 import red_team as _red_team  # noqa: E402
@@ -36,6 +37,23 @@ from xlsx_io import read_questions  # noqa: E402
 LIBRARY = ROOT / "room-docs" / "answer-library.yaml"
 
 mcp = FastMCP("trustdesk")
+
+
+def _deal_answers(answers_path: str | None, deal_id: str | None) -> tuple[Path, str | None]:
+    """The answers file for one deal. With a deal id the file must live in that deal's own folder, so a
+    caller working on one customer cannot read another's."""
+    if deal_id and not answers_path:
+        return _deals.resolve_in(deal_id, "answers.json"), deal_id
+    path = _in_repo(answers_path or "work/answers.json")
+    owner = _deals.deal_of(path)
+    if deal_id and owner != deal_id:
+        raise ValueError(f"{answers_path!r} does not belong to deal {deal_id!r}")
+    return path, deal_id or owner
+
+
+def _evaluate(answers_path: str | None, questionnaire_path: str, deal_id: str | None) -> tuple[dict, list[dict]]:
+    path, deal = _deal_answers(answers_path, deal_id)
+    return _gates.evaluate(path, _in_repo(questionnaire_path), deal)
 
 
 def _in_repo(path: str) -> Path:
@@ -92,11 +110,11 @@ def map_framework(control: str) -> dict:
 
 
 @mcp.tool()
-def check_release_gate(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+def check_release_gate(answers_path: str | None = None, questionnaire_path: str = "samples/acme_questionnaire.xlsx",
                        deal_id: str | None = None) -> dict:
     """The packager's release gate: may this deal be packaged? Paths are relative to the repo. Approvals
     come only from the signed ledger (approvals.jsonl next to the answers), never from the answers."""
-    report, _ = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    report, _ = _evaluate(answers_path, questionnaire_path, deal_id)
     return report
 
 
@@ -110,19 +128,19 @@ def drift_check() -> dict:
 
 
 @mcp.tool()
-def red_team_review(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+def red_team_review(answers_path: str | None = None, questionnaire_path: str = "samples/acme_questionnaire.xlsx",
                     deal_id: str | None = None) -> dict:
     """Answers whose figures disagree with the room's own documents, and whether the owner approved
     (judged from the signed ledger)."""
-    report, answers = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    report, answers = _evaluate(answers_path, questionnaire_path, deal_id)
     return _red_team.review(answers, {k: {v["role"]} for k, v in report["approvals"].items()})
 
 
 @mcp.tool()
-def deal_trust_score(answers_path: str = "work/answers.json", questionnaire_path: str = "samples/acme_questionnaire.xlsx",
+def deal_trust_score(answers_path: str | None = None, questionnaire_path: str = "samples/acme_questionnaire.xlsx",
                      deal_id: str | None = None) -> dict:
     """How much of a deal's questionnaire is proven from code, with stale, conflict and approved counts."""
-    report, answers = _gates.evaluate(_in_repo(answers_path), _in_repo(questionnaire_path), deal_id)
+    report, answers = _evaluate(answers_path, questionnaire_path, deal_id)
     s = _trust.score(answers, report["approvals"])
     return {**s, "summary": _trust.line(s)}
 

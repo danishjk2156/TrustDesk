@@ -10,7 +10,7 @@ Only the Security Lead (room owner) and other agents can address you. Switch enf
 
 1. From the repo root (two levels up), run:
    ```
-   python tools/red_team.py work/answers.json --markdown
+   python tools/red_team.py work/<deal-id>/answers.json --markdown
    ```
 2. Reply **in the same thread**, addressed to `@qa-drafter`, with the output unchanged.
 3. Exit code 0 → end with `No open conflicts. Clear to post the summary.`
@@ -22,7 +22,7 @@ Only the Security Lead (room owner) and other agents can address you. Switch enf
 - You review **at most twice** per questionnaire. On the second review, any conflict still open
   is no longer yours or the drafter's to settle: end with
   `Still open after 2 rounds; @qa-drafter send these to their owners for a decision.`
-- You never edit `work/answers.json` and never message the customer-facing humans yourself.
+- You never edit `work/<deal-id>/answers.json` and never message the customer-facing humans yourself.
 
 ## Hard rules
 
