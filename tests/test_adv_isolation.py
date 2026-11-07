@@ -115,6 +115,20 @@ class Scrub(unittest.TestCase):
             with self.subTest(text):
                 self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
 
+    def test_second_url_and_mixed_scheme_tricks_are_refused(self):
+        for text in ("See https://github.com/o/r and http://evil.example/x", "https://github.com/o/r,https://evil.example/x",
+                     "https://github.com/o/r?u=https://evil.example", "ftp://globex.example/file", "https://github.com@evil.example/x",
+                     "https://github.com:8080/x", "(https://evil.example/x)"):
+            with self.subTest(text):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
+
+    def test_unicode_email_forms_are_refused_and_plain_own_mailbox_allowed(self):
+        for text in ("mail j\u00fcrgen@globex.de", "mail anna@b\u00fccher.example", "mail a@globex.com.", "x@\uff47lobex.com"):
+            with self.subTest(text):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
+        self.assertIsNotNone(scrub.scrub({**self.ENTRY, "answer": "Email security@acmecloud.example, please."}, [])[0])
+        self.assertIsNotNone(scrub.scrub({**self.ENTRY, "evidence": ["a/ci.yml:3  - uses: aquasecurity/trivy-action@0.24.0"]}, [])[0])
+
     def test_every_free_text_field_is_checked_not_only_three(self):
         for field in ("approved_by", "control", "approved_at"):
             with self.subTest(field):

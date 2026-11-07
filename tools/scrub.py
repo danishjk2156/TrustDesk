@@ -19,6 +19,7 @@ import re
 import secrets
 import sys
 import unicodedata
+from urllib.parse import urlsplit
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,11 +31,8 @@ LABELS = {"VERIFIED", "COMMITMENT"}
 ROLES = {"security-lead", "legal"}
 KEY_ENV = "TRUSTDESK_SCRUB_KEY"  # secret that keys the source_deal label; never committed
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(Z|[+-]\d{2}:\d{2})\Z")
-EMAIL = re.compile(r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b")  # not `action@0.24.0`
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-URL = re.compile(r"https?://[^\s)\"']+", re.I)
 OWN_DOMAINS = ("acmecloud.example",)  # the vendor's own mailboxes (e.g. security@) are public by design
-OWN_URL = re.compile(r"^https://github\.com/")  # permalinks into the product repo carry no customer data
 
 
 def anonymise_deal(deal_id: str) -> str:
@@ -82,6 +80,38 @@ def _visible(value) -> str:
     return "\n".join(_fold(t) for t in _strings(value))
 
 
+TRAILING = ".,;:)\"'>]"
+URL_JUNK = set("<>[]{}|\\^`,;\"'")
+
+
+def _bad_email(text: str) -> bool:
+    """True if any token looks like an e-mail address and is not plain ASCII at one of our own domains.
+    A token is e-mail-like when it has an @ and a host that ends in letters (`.com`) or holds non-ASCII
+    characters; `codeql-action@v3` and `trivy-action@0.24.0` are not."""
+    for token in text.split():
+        if "@" not in token:
+            continue
+        host = token.rsplit("@", 1)[1].rstrip(TRAILING)
+        if host.isascii() and not re.search(r"\.[A-Za-z]{2,}\Z", host):
+            continue
+        local = token.rsplit("@", 1)[0]
+        if not (token.isascii() and host.lower() in OWN_DOMAINS and local):
+            return True
+    return False
+
+
+def _bad_url(text: str) -> bool:
+    """True if any `scheme://` occurrence is not a plain-ASCII https://github.com/ link, judged one by one."""
+    for m in re.finditer(r"://", text):
+        start = max(text.rfind(c, 0, m.start()) for c in " \t\n(\"'<[") + 1
+        token = text[start:].split()[0].rstrip(TRAILING)
+        parts = urlsplit(token)
+        if not token.isascii() or parts.scheme != "https" or parts.netloc != "github.com" or "://" in token[m.end() - start:] \
+                or URL_JUNK & set(token):
+            return True
+    return False
+
+
 def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
     """(clean entry, problems). A problem means the entry must not be added to the library."""
     problems = []
@@ -100,14 +130,11 @@ def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
         raw = "\n".join(_strings(entry[field]))
         # Allowlists judge the RAW text as well as the folded text, and only plain ASCII passes, so a
         # look-alike host (full-width, composed) cannot fold into an allowed one.
-        emails_raw, emails_folded = ({m.group(0) for m in EMAIL.finditer(t)} for t in (raw, text))
-        if emails_folded - emails_raw or any(not e.isascii() or not e.lower().endswith(tuple("@" + d for d in OWN_DOMAINS))
-                                             for e in emails_raw | emails_folded):
+        if _bad_email(raw) or _bad_email(text):
             problems.append(f"{field} contains an e-mail address")
         if IPV4.search(text) or IPV4.search(raw):
             problems.append(f"{field} contains an IP address")
-        urls_raw, urls_folded = (set(URL.findall(t)) for t in (raw, text))
-        if urls_folded - urls_raw or any(not u.isascii() or not OWN_URL.match(u) for u in urls_raw | urls_folded):
+        if _bad_url(raw) or _bad_url(text):
             problems.append(f"{field} contains a URL that is not a product-repo link")
         for name in customers:
             if name.strip() and re.search(re.escape(_fold(name.strip())), text, re.I):
