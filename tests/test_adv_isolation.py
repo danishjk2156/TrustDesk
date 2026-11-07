@@ -87,6 +87,31 @@ class Scrub(unittest.TestCase):
         self.assertNotIn("globex", json.dumps(clean).lower())
         self.assertTrue(clean["source_deal"].startswith("deal-"))
 
+    def test_customer_name_split_by_invisible_characters_or_fullwidth_is_still_caught(self):
+        for sneaky in ("Glo\u200bbex", "Glo\u00adbex", "\uff27lobex", "G\u2060lobex"):
+            with self.subTest(sneaky):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": f"Agreed with {sneaky}."}, ["Globex"])[0])
+
+    def test_every_free_text_field_is_checked_not_only_three(self):
+        for field in ("approved_by", "control", "approved_at"):
+            with self.subTest(field):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, field: "globex@globex.com"}, ["Globex"])[0])
+
+    def test_source_deal_label_is_not_a_plain_hash_of_the_deal(self):
+        import hashlib
+        plain = "deal-" + hashlib.sha256(b"globex-renewal").hexdigest()[:8]
+        os.environ.pop(scrub.KEY_ENV, None)
+        a, b = (scrub.scrub(self.ENTRY, [])[0]["source_deal"] for _ in range(2))
+        self.assertNotEqual(a, b)  # unkeyed: random, unlinkable
+        self.assertNotIn(plain, (a, b))
+        os.environ[scrub.KEY_ENV] = "test-secret"
+        try:
+            k1, k2 = (scrub.scrub(self.ENTRY, [])[0]["source_deal"] for _ in range(2))
+        finally:
+            os.environ.pop(scrub.KEY_ENV)
+        self.assertEqual(k1, k2)  # keyed: stable
+        self.assertNotIn(k1[:12], plain)
+
     def test_extra_fields_are_dropped(self):
         clean, _ = scrub.scrub({**self.ENTRY, "customer_notes": "Globex wants SOC2", "permalinks": ["x"], "reason": "r"}, [])
         self.assertEqual(set(clean) - set(scrub.ALLOWED), set())

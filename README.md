@@ -182,6 +182,13 @@ tests/                           61 tests + private answer key + Nov 5 run fixtu
 docs/example-run/                output of a real run
 ```
 
+## Trust model
+
+Every assurance is re-proven and independently authenticated at the gate; see
+[docs/threat-model.md](docs/threat-model.md) for the attack-to-test map and
+[docs/security-hardening.md](docs/security-hardening.md) for what to set up outside the repo (roster pin, keys,
+branch ruleset, tokens). `python -m unittest discover -s tests -p "test_adv_*.py"` runs the release blockers.
+
 ## Known Windows issues
 
 Switch + Claude Code on Windows needed these fixes (Switch Console v0.40.1). Rows 2 and 3 are

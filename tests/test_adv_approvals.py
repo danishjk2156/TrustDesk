@@ -209,6 +209,23 @@ class SpoofedApprovals(unittest.TestCase):
                 report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(**change), github_repo="o/r")
                 self.assertTrue(any("not what was merged" in p for p in problems_for(report, "Q1")), report["problems"])
 
+    def test_github_compare_status_mapping_matches_the_api(self):
+        """compare/{commit}...main: GitHub says main is `ahead` of an ancestor commit, `diverged` otherwise."""
+        import json
+        import subprocess
+        from unittest import mock
+
+        def fake_run(argv, **kw):
+            path = argv[2]
+            body = {"user": {"login": "sam-gh"}, "state": "APPROVED", "commit_id": "a" * 40, "submitted_at": NOW.isoformat(),
+                    "merged": True, "base": {"ref": "main"}, "head": {"sha": "a" * 40}} if "/pulls/" in path else {"status": status}
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(body), stderr="")
+
+        ref = {"repo": "o/r", "pr": 1, "review_id": 2, "commit": "a" * 40}
+        for status, expected in (("ahead", True), ("identical", True), ("behind", False), ("diverged", False)):
+            with self.subTest(status), mock.patch.object(approvals.subprocess, "run", fake_run):
+                self.assertIs(approvals.GitHubSource().review(ref)["on_main"], expected)
+
     def test_github_review_merged_into_another_branch_is_rejected(self):
         report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(base="feature"), github_repo="o/r")
         self.assertFalse(report["ok"])

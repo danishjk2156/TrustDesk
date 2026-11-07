@@ -178,7 +178,7 @@ class GitHubSource:
         return {"login": (r.get("user") or {}).get("login"), "state": r.get("state"), "commit_id": r.get("commit_id"),
                 "submitted_at": r.get("submitted_at"), "merged": bool(pr.get("merged")), "base": (pr.get("base") or {}).get("ref"),
                 "head_sha": (pr.get("head") or {}).get("sha"),
-                "on_main": compare.get("status") in ("behind", "identical")}  # the reviewed commit is an ancestor of main
+                "on_main": compare.get("status") in ("ahead", "identical")}  # compare/{commit}...main: main is ahead of (or is) the commit
 
     def digests(self, ref: dict, deal: str) -> dict:
         path = f"approvals/digests-{deal}.json"
