@@ -21,6 +21,9 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import xlsx_safety  # noqa: E402
+
 REQUIRED = ("id", "question")
 OUTPUT_COLUMNS = ("Answer", "Label", "Evidence", "Approved by", "Frameworks")
 
@@ -51,27 +54,54 @@ def _header_map(ws) -> dict[str, int]:
 
 
 def read_questions(path: str | Path) -> list[dict]:
-    """Return every non-empty question row, in sheet order."""
-    ws = load_workbook(path, read_only=True).active
-    cols = _header_map(ws)
-    questions = []
-    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        qid = row[cols["id"] - 1]
-        text = row[cols["question"] - 1]
-        if qid is None and text is None:
-            continue
-        if qid is None or text is None:
-            raise ValueError(f"row {row_idx}: ID and Question must both be filled")
-        category = row[cols["category"] - 1] if "category" in cols else None
-        questions.append(
-            {
-                "id": str(qid).strip(),
-                "question": str(text).strip(),
-                "category": str(category).strip() if category else None,
-                "row": row_idx,
-            }
-        )
-    return questions
+    """Return every non-empty question row, in sheet order.
+
+    The file is checked first (macros, external links, zip bombs: tools/xlsx_safety.py). Each question
+    carries `flags`: reasons a person should look (instruction-like text, a formula, hidden row).
+    Duplicate or malformed IDs and oversized sheets are errors, never guesses.
+    """
+    xlsx_safety.check_file(path)
+    wb = load_workbook(path)  # not read-only: row visibility is needed
+    try:
+        ws = wb.active
+        if ws.sheet_state != "visible":
+            raise ValueError(f"the active sheet {ws.title!r} is hidden")
+        if ws.max_row > xlsx_safety.MAX_ROWS + 1:
+            raise ValueError(f"{ws.max_row} rows; the limit is {xlsx_safety.MAX_ROWS}")
+        cols = _header_map(ws)
+        questions, seen = [], set()
+        for row_idx in range(2, ws.max_row + 1):
+            raw_id = ws.cell(row=row_idx, column=cols["id"]).value
+            raw_text = ws.cell(row=row_idx, column=cols["question"]).value
+            if raw_id is None and raw_text is None:
+                continue
+            if raw_id is None or raw_text is None:
+                raise ValueError(f"row {row_idx}: ID and Question must both be filled")
+            qid = xlsx_safety.valid_id(raw_id)
+            if qid in seen:
+                raise ValueError(f"row {row_idx}: duplicate question ID {qid!r}")
+            seen.add(qid)
+            flags = xlsx_safety.flags_for(raw_text)
+            if ws.row_dimensions[row_idx].hidden:
+                flags.append("hidden row")
+            category = ws.cell(row=row_idx, column=cols["category"]).value if "category" in cols else None
+            questions.append({"id": qid, "question": xlsx_safety.clean_text(raw_text),
+                              "category": xlsx_safety.clean_text(category, 200) if category else None,
+                              "row": row_idx, "flags": flags})
+        return questions
+    finally:
+        wb.close()
+
+
+def _defuse_formulas(ws) -> None:
+    """The customer's own cells go back out too: any formula in them becomes plain text."""
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.data_type == "f" or (isinstance(cell.value, str) and cell.value.startswith("=")):
+                cell.value = xlsx_safety.safe_cell(str(cell.value))
+                cell.data_type = "s"
+            if cell.hyperlink:
+                cell.hyperlink = None
 
 
 def _approver_label(approval: dict | None) -> str | None:
@@ -90,6 +120,7 @@ def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | 
     filled from it only; the record's own `approved_by` is never written out.
     """
     path = Path(path)
+    xlsx_safety.check_file(path)
     out_path = Path(out_path) if out_path else path.with_name(f"{path.stem}_completed.xlsx")
     wb = load_workbook(path)
     ws = wb.active
@@ -128,11 +159,15 @@ def write_answers(path: str | Path, answers: list[dict], out_path: str | Path | 
             "Frameworks": _framework_label(a.get("control")),
         }
         for name, value in values.items():
-            cell = ws.cell(row=r, column=out_cols[name], value=value)
+            cell = ws.cell(row=r, column=out_cols[name])
+            cell.value = xlsx_safety.safe_cell(value)
+            cell.data_type = "s" if isinstance(cell.value, str) else cell.data_type  # never a formula
             cell.alignment = wrap
+    _defuse_formulas(ws)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out_path)
+    wb.close()
     return out_path
 
 
