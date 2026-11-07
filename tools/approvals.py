@@ -46,6 +46,8 @@ DEAL_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 CLOCK_SKEW = timedelta(minutes=5)
 MAX_AGE = timedelta(days=30)
 ROSTER = ROOT / "room-docs" / "approvers.yaml"
+_REPO = re.compile(r"^[A-Za-z0-9_-][\w.-]*/[A-Za-z0-9_-][\w.-]*$")  # no segment made only of dots
+_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def required_role(label: str) -> str:
@@ -108,6 +110,12 @@ def verify_signature(public_b64: str, payload: dict, signature_b64: str) -> bool
         return False
 
 
+def load_github_repo(path: Path = ROSTER) -> str | None:
+    """The one repository whose PR reviews count as approvals (`github_repo: owner/name` in the roster)."""
+    repo = (yaml.safe_load(path.read_bytes()) or {}).get("github_repo")
+    return repo if isinstance(repo, str) and _REPO.match(repo) else None
+
+
 def load_roster(path: Path = ROSTER) -> tuple[dict[str, dict], str]:
     """({approver id: {roles, github, public_key}}, sha256 of the file)."""
     raw = path.read_bytes()
@@ -163,8 +171,10 @@ class GitHubSource:
         out = subprocess.run(["gh", "api", f"repos/{ref['repo']}/pulls/{int(ref['pr'])}/reviews/{int(ref['review_id'])}"],
                              capture_output=True, text=True, timeout=30, check=True).stdout
         r = json.loads(out)
+        pr = json.loads(subprocess.run(["gh", "api", f"repos/{ref['repo']}/pulls/{int(ref['pr'])}"],
+                                       capture_output=True, text=True, timeout=30, check=True).stdout)
         return {"login": (r.get("user") or {}).get("login"), "state": r.get("state"), "commit_id": r.get("commit_id"),
-                "submitted_at": r.get("submitted_at")}
+                "submitted_at": r.get("submitted_at"), "merged": bool(pr.get("merged")), "base": (pr.get("base") or {}).get("ref")}
 
     def digests(self, ref: dict, deal: str) -> dict:
         path = f"approvals/digests-{deal}.json"
@@ -173,8 +183,6 @@ class GitHubSource:
         return json.loads(base64.b64decode(out))
 
 
-_REPO = re.compile(r"^[\w.-]+/[\w.-]+$")
-_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _parse_time(value) -> datetime | None:
@@ -194,7 +202,8 @@ class Approval:
     at: datetime
 
 
-def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | None) -> tuple[Approval | None, str | None]:
+def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | None,
+                 github_repo: str | None = None) -> tuple[Approval | None, str | None]:
     approver, role = str(entry.get("approver")), entry.get("role")
     person = roster.get(approver)
     if entry.get("deal") != deal:
@@ -213,6 +222,8 @@ def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | No
             return None, "GitHub approvals need online verification (run the gate with --verify-github)"
         if not (_REPO.match(str(ref.get("repo"))) and _SHA.match(str(ref.get("commit"))) and DEAL_ID.match(deal)):
             return None, "malformed GitHub review reference"
+        if ref["repo"] != github_repo:
+            return None, "GitHub review is not from the repository the roster pins (github_repo)"
         try:
             review = github.review(ref)
             manifest = github.digests(ref, deal)
@@ -220,6 +231,8 @@ def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | No
             return None, f"GitHub could not confirm the review: {type(exc).__name__}"
         if review["state"] != "APPROVED" or review["commit_id"] != ref["commit"] or review["login"] != person["github"]:
             return None, "GitHub review is not an approval by that person on that commit"
+        if not review.get("merged") or review.get("base") != "main":
+            return None, "the reviewed PR is not merged into main"
         if manifest.get(entry.get("answer_id")) != entry.get("digest"):
             return None, "the reviewed commit does not list this digest"
         at = _parse_time(review["submitted_at"])
@@ -231,7 +244,7 @@ def _check_entry(entry: dict, roster: dict, deal: str, github: GitHubSource | No
 
 
 def valid_approvals(entries: list[dict], roster: dict, deal: str, now: datetime, github: GitHubSource | None = None,
-                    max_age: timedelta = MAX_AGE) -> tuple[list[Approval], list[str]]:
+                    max_age: timedelta = MAX_AGE, github_repo: str | None = None) -> tuple[list[Approval], list[str]]:
     """Approvals that verify, are not future-dated or expired, and are not revoked; plus why others failed."""
     good, rejected, revokes = [], [], []
     for entry in entries:
@@ -239,7 +252,7 @@ def valid_approvals(entries: list[dict], roster: dict, deal: str, now: datetime,
         if kind not in ("approval", "revoke"):
             rejected.append(f"unknown ledger entry type {kind!r}")
             continue
-        approval, why = _check_entry(entry, roster, deal, github)
+        approval, why = _check_entry(entry, roster, deal, github, github_repo)
         if approval is None:
             rejected.append(f"{entry.get('answer_id')}: {why}")
         elif approval.at > now + CLOCK_SKEW:

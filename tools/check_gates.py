@@ -14,13 +14,15 @@ Checks every answer record against the questionnaire, the code and the approval 
      for COMMITMENT) for the digest of THIS version of the answer and its evidence (tools/approvals.py)
   5. no red-team conflict is open (an answer disagreeing with a room document needs its owner's approval)
 
-`approved_by` inside an answer record is never read. Prints a JSON report; exit 0 = all gates pass,
+The roster is pinned: `evaluate` (CLI and MCP) refuses to pass unless TRUSTDESK_ROSTER_SHA256 or
+--roster-sha256 matches the roster's hash. `approved_by` inside an answer record is never read. Prints a JSON report; exit 0 = all gates pass,
 1 = blocked, 2 = bad input.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -32,6 +34,7 @@ import approvals  # noqa: E402
 import claims  # noqa: E402
 import red_team  # noqa: E402
 
+PIN_ENV = "TRUSTDESK_ROSTER_SHA256"  # kept outside the repo (CI secret or the approver's shell)
 LABELS = {"VERIFIED", "NEEDS-EVIDENCE", "COMMITMENT"}
 CITE = re.compile(r"^(?P<path>[\w./-]+):(?P<line>\d+)  (?P<text>.+)$")
 
@@ -69,7 +72,7 @@ def _approval_problem(qid: str, role: str, digest: str, everything: list[approva
 def check(answers: list[dict], question_ids: list[str], root: Path = ROOT, *, question_texts: dict[str, str] | None = None,
           repo: Path | None = None, ledger: list[dict] | None = None, roster: dict | None = None, deal: str = "default",
           now: datetime | None = None, github: approvals.GitHubSource | None = None, roster_sha256: str | None = None,
-          expect_roster_sha256: str | None = None) -> dict:
+          expect_roster_sha256: str | None = None, github_repo: str | None = None) -> dict:
     problems: list[dict] = []
     repo = (repo or claims.search.DEFAULT_REPO).resolve()
     now = now or datetime.now(timezone.utc)
@@ -79,7 +82,7 @@ def check(answers: list[dict], question_ids: list[str], root: Path = ROOT, *, qu
 
     if expect_roster_sha256 and roster_sha256 != expect_roster_sha256:
         bad("roster", "approver roster does not match the pinned hash; it may have been edited")
-    live, rejected = approvals.valid_approvals(ledger or [], roster or {}, deal, now, github)
+    live, rejected = approvals.valid_approvals(ledger or [], roster or {}, deal, now, github, github_repo=github_repo)
     index: dict[tuple[str, str], list[approvals.Approval]] = {}
     for a in live:
         index.setdefault((a.answer_id, a.digest), []).append(a)
@@ -149,11 +152,16 @@ def evaluate(answers_path, questionnaire, deal: str | None = None, *, ledger: st
     questions = read_questions(questionnaire)
     roster_file = Path(roster_path) if roster_path else approvals.ROSTER
     roster, roster_hash = approvals.load_roster(roster_file) if roster_file.is_file() else ({}, None)
+    github_repo = approvals.load_github_repo(roster_file) if roster_file.is_file() else None
+    pin = roster_sha256 or os.environ.get(PIN_ENV)
     entries, ledger_problems = approvals.read_ledger(Path(ledger) if ledger else answers_path.with_name("approvals.jsonl"))
     report = check(answers, [q["id"] for q in questions], question_texts={q["id"]: q["question"] for q in questions},
                    repo=repo, ledger=entries, roster=roster, deal=deal, roster_sha256=roster_hash,
-                   expect_roster_sha256=roster_sha256, github=approvals.GitHubSource() if verify_github else None)
+                   expect_roster_sha256=pin, github=approvals.GitHubSource() if verify_github else None, github_repo=github_repo)
     report["rejected_approvals"] += ledger_problems
+    if not pin:  # the roster is the trust anchor: unpinned, anyone who can edit the repo can add an approver
+        report["problems"].append({"id": "roster", "problem": f"no pinned roster hash; set {PIN_ENV} or pass --roster-sha256"})
+        report["ok"] = False
     return report, answers
 
 

@@ -1,3 +1,5 @@
+# Only PR reviews in this repository count as GitHub approvals (must be merged into main).
+# github_repo: owner/name
 # Who may approve what. Change this file only through a reviewed pull request (CODEOWNERS).
 # The release gate can pin its hash: check_gates.py --roster-sha256 <hash>.
 #

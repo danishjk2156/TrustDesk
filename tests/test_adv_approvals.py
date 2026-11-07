@@ -121,7 +121,7 @@ class SpoofedApprovals(unittest.TestCase):
 
         class Fake:
             def review(self, ref):
-                return {"login": "mallory", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat()}
+                return {"login": "mallory", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
 
             def digests(self, ref, deal):
                 return {"Q1": digest}
@@ -129,7 +129,7 @@ class SpoofedApprovals(unittest.TestCase):
         e = {"type": "approval", "deal": support.DEAL, "answer_id": "Q1", "digest": digest, "role": "security-lead",
              "approver": "sam", "at": NOW.isoformat(), "provider": "github",
              "review": {"repo": "o/r", "pr": 1, "review_id": 2, "commit": "a" * 40}}
-        report = gate(self.answers, self.only("Q1", [e]), github=Fake())
+        report = gate(self.answers, self.only("Q1", [e]), github=Fake(), github_repo="o/r")
         self.assertFalse(report["ok"])
 
     def test_github_review_by_the_right_person_is_accepted(self):
@@ -137,7 +137,7 @@ class SpoofedApprovals(unittest.TestCase):
 
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat()}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
 
             def digests(self, ref, deal):
                 return {"Q1": digest}
@@ -145,14 +145,14 @@ class SpoofedApprovals(unittest.TestCase):
         e = {"type": "approval", "deal": support.DEAL, "answer_id": "Q1", "digest": digest, "role": "security-lead",
              "approver": "sam", "at": NOW.isoformat(), "provider": "github",
              "review": {"repo": "o/r", "pr": 1, "review_id": 2, "commit": "a" * 40}}
-        self.assertTrue(gate(self.answers, self.only("Q1", [e]), github=Fake())["ok"])
+        self.assertTrue(gate(self.answers, self.only("Q1", [e]), github=Fake(), github_repo="o/r")["ok"])
 
     def test_github_review_for_a_different_digest_manifest_is_rejected(self):
         digest = support.digests(self.answers)["Q1"]
 
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat()}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
 
             def digests(self, ref, deal):
                 return {"Q1": "f" * 64}
@@ -165,12 +165,65 @@ class SpoofedApprovals(unittest.TestCase):
     def blocked_with(self, e):
         class Fake:
             def review(self, ref):
-                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat()}
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(), "merged": True, "base": "main"}
 
             def digests(self, ref, deal):
                 return {"Q1": "f" * 64}
 
-        self.assertFalse(gate(self.answers, self.only("Q1", [e]), github=Fake())["ok"])
+        self.assertFalse(gate(self.answers, self.only("Q1", [e]), github=Fake(), github_repo="o/r")["ok"])
+
+    def _github_entry(self, repo="o/r"):
+        return {"type": "approval", "deal": support.DEAL, "answer_id": "Q1", "digest": support.digests(self.answers)["Q1"],
+                "role": "security-lead", "approver": "sam", "at": NOW.isoformat(), "provider": "github",
+                "review": {"repo": repo, "pr": 1, "review_id": 2, "commit": "a" * 40}}
+
+    def _fake(self, **review):
+        digest = support.digests(self.answers)["Q1"]
+
+        class Fake:
+            def review(self, ref):
+                return {"login": "sam-gh", "state": "APPROVED", "commit_id": ref["commit"], "submitted_at": NOW.isoformat(),
+                        "merged": True, "base": "main", **review}
+
+            def digests(self, ref, deal):
+                return {"Q1": digest}
+
+        return Fake()
+
+    def test_github_review_from_an_unpinned_repo_is_rejected(self):
+        e = self._github_entry(repo="attacker/fork")
+        report = gate(self.answers, self.only("Q1", [e]), github=self._fake(), github_repo="o/r")
+        self.assertTrue(any("pins" in p for p in problems_for(report, "Q1")), report["problems"])
+
+    def test_github_approval_without_a_pinned_repo_is_rejected(self):
+        report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake())
+        self.assertFalse(report["ok"])
+
+    def test_github_review_on_an_unmerged_pr_is_rejected(self):
+        report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(merged=False), github_repo="o/r")
+        self.assertTrue(any("not merged" in p for p in problems_for(report, "Q1")), report["problems"])
+
+    def test_github_review_merged_into_another_branch_is_rejected(self):
+        report = gate(self.answers, self.only("Q1", [self._github_entry()]), github=self._fake(base="feature"), github_repo="o/r")
+        self.assertFalse(report["ok"])
+
+    def test_dot_only_repo_segments_are_malformed(self):
+        for repo in ("../x", "o/..", "./r", "o/r/extra"):
+            out, why = approvals._check_entry(self._github_entry(repo=repo), support.ROSTER, support.DEAL, object(), "o/r")
+            self.assertIsNone(out, repo)
+
+    def test_unpinned_roster_fails_closed_in_evaluate(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        import check_gates
+        os.environ.pop(check_gates.PIN_ENV, None)
+        with tempfile.TemporaryDirectory() as tmp:
+            answers = Path(tmp) / "answers.json"
+            answers.write_text("[]", encoding="utf-8")
+            report, _ = check_gates.evaluate(answers, support.SHEET, "acme")
+        self.assertFalse(report["ok"])
+        self.assertTrue(any(p["id"] == "roster" and "pinned" in p["problem"] for p in report["problems"]))
 
     def test_malformed_github_reference_is_rejected_before_any_call(self):
         e = {"type": "approval", "deal": support.DEAL, "answer_id": "Q1", "digest": "d", "role": "security-lead",

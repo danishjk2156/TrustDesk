@@ -11,10 +11,14 @@ being the only thing that changes. Only the Security Lead and other agents can a
 2. **Check there is a recipe:** `python tools/remediate.py --list`. Exit code 3 from step 4 means
    the gap needs a person (a document, a test, a contract), not code: say so in one line and stop.
 3. **Branch:** `git switch -c trustdesk/fix-<control>` from the latest `main`.
-4. **Apply and prove:** `python tools/remediate.py <control>`.
+4. **Apply and prove:** `python tools/remediate.py <control> --require-tools`. The script validates its own fix
+   (declared files only, Terraform append-only, no dangling reference, no weaker control, `terraform fmt`,
+   `checkov`) and rolls the files back if anything fails.
    - Exit 0 → the evidence engine now finds the control. Continue.
-   - Exit 1 → the fix did not prove the control. `git switch main`, delete the branch, post the
-     output. Never commit an unproven fix.
+   - Exit 1 or 4 → the fix did not prove the control (1) or failed independent validation (4), and
+     the files are already rolled back. `git switch main`, delete the branch, post the
+     `validation.problems`. Never commit an unproven or unvalidated fix. A missing `terraform` or
+     `checkov` also exits 4 here: tell the Security Lead which tool to install; never retry without `--require-tools`.
 5. **Commit and push:** `git commit -am "trustdesk: fix <control> (<question IDs>)"`, `git push -u origin HEAD`.
 6. **Open the PR** with `gh pr create` (if `gh` is not on PATH, use `"C:\Program Files\GitHub CLI\gh.exe"`).
    Title: `trustdesk: fix <control>`. Body: the recipe, the files changed, and the evidence
