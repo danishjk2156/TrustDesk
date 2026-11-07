@@ -97,11 +97,17 @@ def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
         if _hidden_chars(entry[field]):
             problems.append(f"{field} contains control or invisible characters")
         text = _visible(entry[field])
-        if any(not m.group(0).lower().endswith(tuple("@" + d for d in OWN_DOMAINS)) for m in EMAIL.finditer(text)):
+        raw = "\n".join(_strings(entry[field]))
+        # Allowlists judge the RAW text as well as the folded text, and only plain ASCII passes, so a
+        # look-alike host (full-width, composed) cannot fold into an allowed one.
+        emails_raw, emails_folded = ({m.group(0) for m in EMAIL.finditer(t)} for t in (raw, text))
+        if emails_folded - emails_raw or any(not e.isascii() or not e.lower().endswith(tuple("@" + d for d in OWN_DOMAINS))
+                                             for e in emails_raw | emails_folded):
             problems.append(f"{field} contains an e-mail address")
-        if IPV4.search(text):
+        if IPV4.search(text) or IPV4.search(raw):
             problems.append(f"{field} contains an IP address")
-        if any(not OWN_URL.match(u) for u in URL.findall(text)):
+        urls_raw, urls_folded = (set(URL.findall(t)) for t in (raw, text))
+        if urls_folded - urls_raw or any(not u.isascii() or not OWN_URL.match(u) for u in urls_raw | urls_folded):
             problems.append(f"{field} contains a URL that is not a product-repo link")
         for name in customers:
             if name.strip() and re.search(re.escape(_fold(name.strip())), text, re.I):

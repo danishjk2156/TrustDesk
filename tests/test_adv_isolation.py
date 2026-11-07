@@ -109,6 +109,12 @@ class Scrub(unittest.TestCase):
                 self.assertIsNone(clean)
                 self.assertTrue(problems)
 
+    def test_lookalike_hosts_do_not_fold_into_the_allowlist(self):
+        for text in ("See https://\uff47ithub.com/o/r/blob/x", "See https://github.com\u2024evil.example/x",
+                     "Mail security@acmecloud\uff0eexample", "Mail security@\uff41cmecloud.example"):
+            with self.subTest(text):
+                self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": text}, [])[0])
+
     def test_every_free_text_field_is_checked_not_only_three(self):
         for field in ("approved_by", "control", "approved_at"):
             with self.subTest(field):
