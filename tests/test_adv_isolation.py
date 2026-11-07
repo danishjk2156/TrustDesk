@@ -92,6 +92,14 @@ class Scrub(unittest.TestCase):
             with self.subTest(sneaky):
                 self.assertIsNone(scrub.scrub({**self.ENTRY, "answer": f"Agreed with {sneaky}."}, ["Globex"])[0])
 
+    def test_control_characters_are_refused_and_cannot_hide_a_name(self):
+        for sneaky in ("Glo\x00bex", "Glo\x07bex", "Glo\u200bbex"):
+            with self.subTest(repr(sneaky)):
+                clean, problems = scrub.scrub({**self.ENTRY, "evidence": [f"{sneaky}/main.tf:1  x"]}, ["Globex"])
+                self.assertIsNone(clean)
+                self.assertTrue(any("invisible" in p for p in problems))
+                self.assertTrue(any("names the customer" in p for p in problems), problems)
+
     def test_every_free_text_field_is_checked_not_only_three(self):
         for field in ("approved_by", "control", "approved_at"):
             with self.subTest(field):

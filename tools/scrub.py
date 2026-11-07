@@ -46,10 +46,28 @@ def anonymise_deal(deal_id: str) -> str:
     return "deal-" + secrets.token_hex(6)
 
 
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _strings(v)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _strings(v)
+    elif value is not None:
+        yield str(value)
+
+
+def _hidden_chars(value) -> bool:
+    return any(unicodedata.category(c) in ("Cc", "Cf") and c not in "\n\t" for t in _strings(value) for c in t)
+
+
 def _visible(value) -> str:
-    """The text as a reader sees it: NFKC, invisible and control characters removed, so a name cannot be split."""
-    text = unicodedata.normalize("NFKC", json.dumps(value, ensure_ascii=False))
-    return "".join(c for c in text if unicodedata.category(c) not in ("Cc", "Cf"))
+    """The text as a reader sees it: each string NFKC-normalised with control and invisible characters
+    removed BEFORE any serialising, so a name cannot be split and escapes cannot hide a separator."""
+    return "\n".join("".join(c for c in unicodedata.normalize("NFKC", t) if unicodedata.category(c) not in ("Cc", "Cf") or c in "\n\t")
+                     for t in _strings(value))
 
 
 def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
@@ -64,6 +82,8 @@ def scrub(entry: dict, customers: list[str]) -> tuple[dict | None, list[str]]:
     if entry.get("approved_at") is not None and not TIMESTAMP.match(str(entry.get("approved_at"))):
         problems.append("approved_at is not an ISO timestamp")
     for field in (f for f in ALLOWED if f != "source_deal" and f in entry):
+        if _hidden_chars(entry[field]):
+            problems.append(f"{field} contains control or invisible characters")
         text = _visible(entry[field])
         if any(not m.group(0).lower().endswith(tuple("@" + d for d in OWN_DOMAINS)) for m in EMAIL.finditer(text)):
             problems.append(f"{field} contains an e-mail address")
